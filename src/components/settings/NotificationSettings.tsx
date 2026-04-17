@@ -124,7 +124,7 @@ export function NotificationSettings({ businessId, templates }: NotificationSett
       '{service_name}': 'תספורת גברים',
       '{staff_name}': 'דני המספר',
       '{branch_name}': 'סניף תל אביב',
-      '{appointment_date}': '15/10/2025',
+      '{appointment_date}': '15/10/2026',
       '{appointment_time}': '10:00',
       '{confirmation_code}': 'ABC123',
     };
@@ -421,7 +421,7 @@ export function NotificationSettings({ businessId, templates }: NotificationSett
                                   service_name: 'תספורת גברים',
                                   staff_name: 'דני המספר',
                                   branch_name: 'סניף תל אביב',
-                                  appointment_date: '15/10/2025',
+                                  appointment_date: '15/10/2026',
                                   appointment_time: '10:00',
                                   confirmation_code: 'ABC123',
                                 };

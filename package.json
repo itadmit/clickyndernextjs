@@ -4,8 +4,7 @@
   "description": "פלטפורמת תזמון תורים מתקדמת - כמו Calendly לישראל",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "postbuild": "prisma generate",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "db:generate": "prisma generate",

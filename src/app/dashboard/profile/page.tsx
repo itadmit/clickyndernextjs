@@ -1,0 +1,56 @@
+import { getServerSession } from 'next-auth';
+import { redirect } from 'next/navigation';
+import { authOptions } from '@/lib/auth';
+import { prisma } from '@/lib/prisma';
+import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
+import { ProfileSettings } from '@/components/profile/ProfileSettings';
+
+export default async function ProfilePage() {
+  const session = await getServerSession(authOptions);
+
+  if (!session?.user?.id) {
+    redirect('/auth/signin');
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      createdAt: true,
+      passwordHash: true,
+      accounts: {
+        where: { provider: 'google' },
+        select: { provider: true },
+      },
+    },
+  });
+
+  if (!user) {
+    redirect('/auth/signin');
+  }
+
+  return (
+    <div>
+      <DashboardHeader
+        title="פרופיל משתמש"
+        subtitle="נהל את פרטי החשבון שלך"
+      />
+      <div className="p-4 md:p-8 max-w-4xl mx-auto">
+        <ProfileSettings
+          user={{
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phone: user.phone,
+            createdAt: user.createdAt,
+          }}
+          hasPassword={!!user.passwordHash}
+          isGoogleUser={user.accounts.length > 0}
+        />
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,1251 @@
+// Clickinder Database Schema
+// מבוסס על PostgreSQL עם תמיכה מלאה ב-Multi-Tenant
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// משתמשים ועסקים (Users & Businesses)
+// ============================================
+
+// NextAuth Tables - נדרשות ל-PrismaAdapter
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  phone         String?   @unique // אופציונלי למשתמשי Google - יושלם בהמשך
+  passwordHash  String?   @map("password_hash") // אופציונלי למשתמשי Google
+  isSuperAdmin  Boolean   @default(false) @map("is_super_admin")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  lastLoginAt   DateTime? @map("last_login_at")
+
+  // NextAuth Relations
+  accounts Account[]
+  sessions Session[]
+
+  // Relations
+  ownedBusinesses Business[]       @relation("BusinessOwner")
+  memberships     BusinessMember[]
+  pushTokens      PushToken[]
+
+  @@index([email])
+  @@index([phone])
+  @@index([isSuperAdmin])
+  @@map("users")
+}
+
+model Business {
+  id          String  @id @default(cuid())
+  ownerUserId String  @map("owner_user_id")
+  name        String
+  slug        String  @unique
+  description String?
+  address     String?
+  phone       String?
+  email       String?
+  timezone    String  @default("Asia/Jerusalem")
+  locale      String  @default("he-IL")
+
+  // מיתוג
+  logoUrl              String? @map("logo_url")
+  templateStyle        String  @default("modern") @map("template_style") // modern, classic, minimal
+  primaryColor         String? @default("#3b82f6") @map("primary_color")
+  secondaryColor       String? @default("#758dff") @map("secondary_color")
+  backgroundColorStart String? @default("#dbeafe") @map("background_color_start")
+  backgroundColorEnd   String? @default("#faf5ff") @map("background_color_end")
+  font                 String  @default("Noto Sans Hebrew")
+
+  // הגדרות
+  showBranches         Boolean @default(false) @map("show_branches")
+  showStaff            Boolean @default(true) @map("show_staff")
+  onlinePaymentEnabled Boolean @default(false) @map("online_payment_enabled")
+  currency             String  @default("ILS")
+
+  // הגדרות תזכורות
+  reminderEnabled         Boolean @default(true) @map("reminder_enabled")
+  reminderHoursBefore     Int     @default(24) @map("reminder_hours_before") // כמה שעות לפני לשלוח תזכורת
+  confirmationEnabled     Boolean @default(false) @map("confirmation_enabled") // אם לבקש אישור הגעה
+  confirmationHoursBefore Int     @default(24) @map("confirmation_hours_before") // כמה שעות לפני לבקש אישור
+
+  // מצב מתכנת
+  developerMode Boolean @default(false) @map("developer_mode")
+  customCss     String? @map("custom_css") @db.Text
+  customJs      String? @map("custom_js") @db.Text
+
+  // רשתות חברתיות
+  facebookUrl    String? @map("facebook_url")
+  instagramUrl   String? @map("instagram_url")
+  twitterUrl     String? @map("twitter_url")
+  youtubeUrl     String? @map("youtube_url")
+  whatsappNumber String? @map("whatsapp_number")
+  telegramUrl    String? @map("telegram_url")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Payment / Quick Payments (PayMe)
+  paymentProvider          String?  @map("payment_provider")
+  paymeSellerPaymeId       String?  @map("payme_seller_payme_id")
+  paymeApiKey              String?  @map("payme_api_key")
+  depositEnabled           Boolean  @default(false) @map("deposit_enabled")
+  depositAmountCents       Int?     @map("deposit_amount_cents")
+  depositPercentage        Int?     @map("deposit_percentage")
+  requirePaymentForBooking Boolean  @default(false) @map("require_payment_for_booking")
+
+  // Cancellation policy
+  cancellationPolicyEnabled  Boolean @default(false) @map("cancellation_policy_enabled")
+  cancellationDeadlineHours  Int     @default(24) @map("cancellation_deadline_hours")
+  cancellationFeePercentage  Int?    @map("cancellation_fee_percentage")
+  noShowFeePercentage        Int?    @map("no_show_fee_percentage")
+
+  // Relations
+  owner                  User                    @relation("BusinessOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
+  members                BusinessMember[]
+  branches               Branch[]
+  staff                  Staff[]
+  serviceCategories      ServiceCategory[]
+  services               Service[]
+  businessHours          BusinessHours[]
+  customers              Customer[]
+  appointments           Appointment[]
+  availabilityRules      AvailabilityRule[]
+  timeOffs               TimeOff[]
+  slotPolicy             SlotPolicy?
+  subscription           Subscription?
+  usageCounters          UsageCounter[]
+  notificationTemplates  NotificationTemplate[]
+  notifications          Notification[]
+  dashboardNotifications DashboardNotification[]
+  integrations           Integration[]
+  webhooks               Webhook[]
+  payments               Payment[]
+  publicPages            PublicPage[]
+  eventTracking          EventTracking[]
+  intakeForms            IntakeForm[]
+  groupSessions          GroupSession[]
+  waitlistEntries        WaitlistEntry[]
+  recurringSeries        RecurringSeries[]
+  coupons                Coupon[]
+  resources              Resource[]
+
+  @@index([slug])
+  @@index([ownerUserId])
+  @@map("businesses")
+}
+
+model BusinessMember {
+  id         String     @id @default(cuid())
+  businessId String     @map("business_id")
+  userId     String     @map("user_id")
+  role       MemberRole
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, userId])
+  @@index([businessId])
+  @@index([userId])
+  @@map("business_members")
+}
+
+enum MemberRole {
+  owner
+  admin
+  manager
+  staff
+  viewer
+}
+
+// ============================================
+// חבילות ומנויים (Packages & Subscriptions)
+// ============================================
+
+model Package {
+  id                     String      @id @default(cuid())
+  code                   PackageCode @unique
+  name                   String
+  maxBranches            Int         @map("max_branches")
+  maxStaff               Int         @map("max_staff")
+  monthlyAppointmentsCap Int         @map("monthly_appointments_cap")
+  priceCents             Int         @map("price_cents")
+  featuresJson           Json?       @map("features_json")
+  createdAt              DateTime    @default(now()) @map("created_at")
+  updatedAt              DateTime    @updatedAt @map("updated_at")
+
+  subscriptions Subscription[]
+
+  @@map("packages")
+}
+
+enum PackageCode {
+  starter
+  pro
+  ultra
+  enterprise
+}
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  businessId           String             @unique @map("business_id")
+  packageId            String             @map("package_id")
+  status               SubscriptionStatus
+  provider             String             @default("payplus")
+  externalCustomerId   String?            @map("external_customer_id")
+  externalMandateToken String?            @map("external_mandate_token")
+  payplusRecurringUid  String?            @map("payplus_recurring_uid")
+  payplusCustomerUid   String?            @map("payplus_customer_uid")
+  payplusCardToken     String?            @map("payplus_card_token")
+  currentPeriodStart   DateTime           @map("current_period_start")
+  currentPeriodEnd     DateTime           @map("current_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  package  Package  @relation(fields: [packageId], references: [id])
+
+  @@index([businessId])
+  @@index([packageId])
+  @@map("subscriptions")
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  canceled
+  trial
+}
+
+model UsageCounter {
+  id                String   @id @default(cuid())
+  businessId        String   @map("business_id")
+  periodMonth       DateTime @map("period_month") @db.Date
+  appointmentsCount Int      @default(0) @map("appointments_count")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, periodMonth])
+  @@index([businessId])
+  @@map("usage_counters")
+}
+
+// ============================================
+// סניפים, עובדים ושירותים (Branches, Staff, Services)
+// ============================================
+
+model Branch {
+  id             String    @id @default(cuid())
+  businessId     String    @map("business_id")
+  name           String
+  address        String?
+  phone          String?
+  active         Boolean   @default(true)
+  isDefault      Boolean   @default(false) @map("is_default")
+  hasCustomHours Boolean   @default(false) @map("has_custom_hours")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
+
+  business          Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  staff             Staff[]
+  branchHours       BranchHours[]
+  availabilityRules AvailabilityRule[]
+  timeOffs          TimeOff[]
+  appointments      Appointment[]
+  groupSessions     GroupSession[]
+
+  @@index([businessId, active])
+  @@map("branches")
+}
+
+model Staff {
+  id                 String           @id @default(cuid())
+  businessId         String           @map("business_id")
+  branchId           String?          @map("branch_id")
+  name               String
+  email              String?
+  phone              String?
+  roleLabel          String?          @map("role_label")
+  calendarColor      String?          @map("calendar_color")
+  active             Boolean          @default(true)
+  calendarProvider   CalendarProvider @default(none) @map("calendar_provider")
+  calendarExternalId String?          @map("calendar_external_id")
+  createdAt          DateTime         @default(now()) @map("created_at")
+  updatedAt          DateTime         @updatedAt @map("updated_at")
+  deletedAt          DateTime?        @map("deleted_at")
+
+  commissionPercentage Int? @map("commission_percentage")
+
+  business          Business           @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch            Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  serviceStaff      ServiceStaff[]
+  staffHours        StaffHours[]
+  staffBreaks       StaffBreak[]
+  availabilityRules AvailabilityRule[]
+  timeOffs          TimeOff[]
+  appointments      Appointment[]
+  groupSessions     GroupSession[]
+
+  @@index([businessId, branchId, active])
+  @@map("staff")
+}
+
+enum CalendarProvider {
+  none
+  google
+  outlook
+  apple
+}
+
+model ServiceCategory {
+  id         String @id @default(cuid())
+  businessId String @map("business_id")
+  name       String
+  position   Int    @default(0)
+
+  business Business  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  services Service[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+  @@map("service_categories")
+}
+
+model Service {
+  id              String    @id @default(cuid())
+  businessId      String    @map("business_id")
+  categoryId      String?   @map("category_id")
+  name            String
+  durationMin     Int       @map("duration_min")
+  priceCents      Int?      @map("price_cents")
+  bufferAfterMin  Int       @default(0) @map("buffer_after_min")
+  description     String?
+  color           String?
+  active          Boolean   @default(true)
+  isGroup         Boolean   @default(false) @map("is_group")
+  maxParticipants Int?      @map("max_participants")
+  minParticipants Int?      @default(1) @map("min_participants")
+  waitlistEnabled Boolean   @default(false) @map("waitlist_enabled")
+  requirePayment  Boolean   @default(false) @map("require_payment")
+  depositOverrideCents Int? @map("deposit_override_cents")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  business         Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  category         ServiceCategory?    @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  serviceStaff     ServiceStaff[]
+  appointments     Appointment[]
+  intakeForms      ServiceIntakeForm[]
+  groupSessions    GroupSession[]
+  waitlistEntries  WaitlistEntry[]
+
+  @@index([businessId, active, categoryId])
+  @@map("services")
+}
+
+model ServiceStaff {
+  serviceId String @map("service_id")
+  staffId   String @map("staff_id")
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff   Staff   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, staffId])
+  @@map("service_staff")
+}
+
+// ============================================
+// סשנים קבוצתיים (Group Sessions)
+// ============================================
+
+model GroupSession {
+  id              String             @id @default(cuid())
+  businessId      String             @map("business_id")
+  serviceId       String             @map("service_id")
+  staffId         String?            @map("staff_id")
+  branchId        String?            @map("branch_id")
+  startAt         DateTime           @map("start_at")
+  endAt           DateTime           @map("end_at")
+  maxParticipants Int                @map("max_participants")
+  currentCount    Int                @default(0) @map("current_count")
+  status          GroupSessionStatus @default(open)
+  notes           String?
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service      Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  staff        Staff?        @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  branch       Branch?       @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  appointments Appointment[]
+
+  @@index([businessId, serviceId, startAt])
+  @@index([businessId, status])
+  @@map("group_sessions")
+}
+
+enum GroupSessionStatus {
+  open
+  full
+  canceled
+  completed
+}
+
+// ============================================
+// שאלונים וטפסים (Intake Forms)
+// ============================================
+
+model IntakeForm {
+  id          String  @id @default(cuid())
+  businessId  String  @map("business_id")
+  name        String // "שאלון בריאות", "טופס הסכמה"
+  description String?
+  isActive    Boolean @default(true) @map("is_active")
+  isGlobal    Boolean @default(false) @map("is_global") // חל על כל השירותים
+  position    Int     @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  business    Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  fields      IntakeFormField[]
+  services    ServiceIntakeForm[]
+  submissions IntakeFormSubmission[]
+
+  @@index([businessId, isActive])
+  @@map("intake_forms")
+}
+
+model IntakeFormField {
+  id             String          @id @default(cuid())
+  formId         String          @map("form_id")
+  type           IntakeFieldType
+  label          String // "האם יש לך אלרגיות?"
+  description    String? // טקסט עזרה
+  placeholder    String?
+  required       Boolean         @default(false)
+  position       Int             @default(0)
+  optionsJson    Json?           @map("options_json") // ["אופציה 1", "אופציה 2"] עבור select/radio/checkbox
+  fileUrl        String?         @map("file_url") // URL של PDF להסכמה
+  validationJson Json?           @map("validation_json") // { minLength, maxLength, regex }
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+
+  form IntakeForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId, position])
+  @@map("intake_form_fields")
+}
+
+enum IntakeFieldType {
+  text          // שדה טקסט קצר
+  textarea      // שדה טקסט ארוך
+  select        // בחירה יחידה (dropdown)
+  radio         // בחירה יחידה (כפתורים)
+  checkbox      // בחירה מרובה (checkboxes)
+  yes_no        // כן/לא
+  number        // מספר
+  date          // תאריך
+  file_upload   // העלאת קובץ
+  pdf_consent   // הצגת PDF + אישור
+  signature     // חתימה דיגיטלית
+  header        // כותרת (לא שאלה)
+  paragraph     // פסקת טקסט (לא שאלה)
+}
+
+// קישור שאלון לשירות (many-to-many)
+model ServiceIntakeForm {
+  serviceId String @map("service_id")
+  formId    String @map("form_id")
+
+  service Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  form    IntakeForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@id([serviceId, formId])
+  @@map("service_intake_forms")
+}
+
+// תשובות שהלקוח מילא
+model IntakeFormSubmission {
+  id            String   @id @default(cuid())
+  formId        String   @map("form_id")
+  appointmentId String?  @map("appointment_id")
+  answersJson   Json     @map("answers_json") // { "field_id": "value", ... }
+  signatureData String?  @map("signature_data") @db.Text // Base64 של חתימה
+  consentGiven  Boolean  @default(false) @map("consent_given")
+  submittedAt   DateTime @default(now()) @map("submitted_at")
+
+  form        IntakeForm   @relation(fields: [formId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([formId, submittedAt])
+  @@index([appointmentId])
+  @@map("intake_form_submissions")
+}
+
+// ============================================
+// שעות עבודה וזמינות (Hours & Availability)
+// ============================================
+
+model BusinessHours {
+  id         String  @id @default(cuid())
+  businessId String  @map("business_id")
+  weekday    Int // 0=Sunday, 6=Saturday
+  openTime   String? @map("open_time") // HH:MM format
+  closeTime  String? @map("close_time") // HH:MM format
+  active     Boolean @default(true)
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, weekday])
+  @@map("business_hours")
+}
+
+model BranchHours {
+  id        String  @id @default(cuid())
+  branchId  String  @map("branch_id")
+  weekday   Int
+  openTime  String? @map("open_time")
+  closeTime String? @map("close_time")
+  active    Boolean @default(true)
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, weekday])
+  @@map("branch_hours")
+}
+
+model StaffHours {
+  id        String  @id @default(cuid())
+  staffId   String  @map("staff_id")
+  weekday   Int
+  openTime  String? @map("open_time")
+  closeTime String? @map("close_time")
+  active    Boolean @default(true)
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@unique([staffId, weekday])
+  @@map("staff_hours")
+}
+
+// הפסקות קבועות לעובד (חוזרות כל שבוע)
+model StaffBreak {
+  id        String  @id @default(cuid())
+  staffId   String  @map("staff_id")
+  weekday   Int // 0=Sunday, 6=Saturday
+  startTime String  @map("start_time") // HH:mm format
+  endTime   String  @map("end_time") // HH:mm format
+  title     String? // e.g., "הפסקת צהריים"
+  active    Boolean @default(true)
+
+  staff Staff @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([staffId, weekday])
+  @@map("staff_breaks")
+}
+
+model AvailabilityRule {
+  id         String                @id @default(cuid())
+  businessId String                @map("business_id")
+  scope      AvailabilityRuleScope
+  branchId   String?               @map("branch_id")
+  staffId    String?               @map("staff_id")
+  date       DateTime              @db.Date
+  openTime   String?               @map("open_time")
+  closeTime  String?               @map("close_time")
+  isOpen     Boolean               @map("is_open")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staff    Staff?   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, scope, date])
+  @@map("availability_rules")
+}
+
+enum AvailabilityRuleScope {
+  business
+  branch
+  staff
+}
+
+model TimeOff {
+  id         String       @id @default(cuid())
+  businessId String       @map("business_id")
+  scope      TimeOffScope
+  type       TimeOffType  @default(vacation)
+  branchId   String?      @map("branch_id")
+  staffId    String?      @map("staff_id")
+  startAt    DateTime     @map("start_at")
+  endAt      DateTime     @map("end_at")
+  reason     String?
+  isRecurring Boolean     @default(false) @map("is_recurring")
+  isAllDay   Boolean      @default(true) @map("is_all_day")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  updatedAt  DateTime     @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch   Branch?  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  staff    Staff?   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, startAt, endAt])
+  @@index([businessId, scope, type])
+  @@map("time_off")
+}
+
+enum TimeOffScope {
+  business
+  branch
+  staff
+}
+
+enum TimeOffType {
+  holiday   // חג
+  vacation  // חופשה
+  personal  // אישי
+  sick      // מחלה
+  other     // אחר
+}
+
+model SlotPolicy {
+  id                 String           @id @default(cuid())
+  businessId         String           @unique @map("business_id")
+  defaultDurationMin Int              @default(30) @map("default_duration_min")
+  defaultGapMin      Int              @default(0) @map("default_gap_min")
+  advanceWindowDays  Int              @default(30) @map("advance_window_days")
+  sameDayBooking     Boolean          @default(true) @map("same_day_booking")
+  /// מינימום שעות קדימה לקביעת תור (ברירת מחדל 2). משמש גם לסינון שעות שעברו היום.
+  minimumAdvanceBookingHours Int      @default(2) @map("minimum_advance_booking_hours")
+  roundingStrategy   RoundingStrategy @default(continuous) @map("rounding_strategy")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@map("slot_policies")
+}
+
+enum RoundingStrategy {
+  on_the_hour
+  every_15
+  every_30
+  continuous
+}
+
+// ============================================
+// לקוחות ותורים (Customers & Appointments)
+// ============================================
+
+model Customer {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  firstName  String   @map("first_name")
+  lastName   String   @map("last_name")
+  phone      String
+  email      String?
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  business               Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments           Appointment[]
+  notifications          Notification[]
+  dashboardNotifications DashboardNotification[]
+  waitlistEntries        WaitlistEntry[]
+
+  @@index([businessId, phone])
+  @@index([businessId, email])
+  @@map("customers")
+}
+
+model Appointment {
+  id                String            @id @default(cuid())
+  businessId        String            @map("business_id")
+  branchId          String?           @map("branch_id")
+  serviceId         String            @map("service_id")
+  staffId           String?           @map("staff_id")
+  customerId        String            @map("customer_id")
+  groupSessionId    String?           @map("group_session_id")
+  recurringSeriesId String?           @map("recurring_series_id")
+  startAt           DateTime          @map("start_at")
+  endAt             DateTime          @map("end_at")
+  status            AppointmentStatus @default(confirmed)
+  priceCents        Int?              @map("price_cents")
+  paymentStatus     PaymentStatus     @default(not_required) @map("payment_status")
+  paymentProvider   String?           @map("payment_provider")
+  depositAmountCents Int?             @map("deposit_amount_cents")
+  paymeSaleId       String?           @map("payme_sale_id")
+  confirmationCode  String            @unique @map("confirmation_code")
+  notesInternal     String?           @map("notes_internal")
+  notesCustomer     String?           @map("notes_customer")
+  source            AppointmentSource @default(public)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  canceledAt        DateTime?         @map("canceled_at")
+
+  business               Business                  @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  branch                 Branch?                   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  service                Service                   @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  staff                  Staff?                    @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  customer               Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  groupSession           GroupSession?              @relation(fields: [groupSessionId], references: [id], onDelete: SetNull)
+  recurringSeries        RecurringSeries?           @relation(fields: [recurringSeriesId], references: [id], onDelete: SetNull)
+  appointmentAudit       AppointmentAudit[]
+  pendingEdits           PendingAppointmentEdit[]
+  confirmations          AppointmentConfirmation[]
+  notifications          Notification[]
+  dashboardNotifications DashboardNotification[]
+  payments               Payment[]
+  intakeSubmissions      IntakeFormSubmission[]
+
+  @@index([businessId, startAt])
+  @@index([businessId, staffId, startAt])
+  @@index([businessId, branchId, startAt])
+  @@index([confirmationCode])
+  @@index([groupSessionId])
+  @@map("appointments")
+}
+
+enum AppointmentStatus {
+  pending
+  confirmed
+  canceled
+  no_show
+  completed
+}
+
+enum PaymentStatus {
+  not_required
+  pending
+  paid
+  refunded
+}
+
+enum AppointmentSource {
+  public
+  admin
+  api
+}
+
+model AppointmentAudit {
+  id              String   @id @default(cuid())
+  appointmentId   String   @map("appointment_id")
+  changedByUserId String?  @map("changed_by_user_id")
+  fromJson        Json?    @map("from_json")
+  toJson          Json     @map("to_json")
+  changedAt       DateTime @default(now()) @map("changed_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId, changedAt])
+  @@map("appointment_audit")
+}
+
+// שינויים ממתינים לאישור לקוח
+model PendingAppointmentEdit {
+  id                String            @id @default(cuid())
+  appointmentId     String            @map("appointment_id")
+  newStartAt        DateTime          @map("new_start_at")
+  newEndAt          DateTime          @map("new_end_at")
+  newServiceId      String            @map("new_service_id")
+  newStaffId        String            @map("new_staff_id")
+  confirmationToken String            @unique @map("confirmation_token")
+  status            PendingEditStatus @default(pending)
+  createdAt         DateTime          @default(now()) @map("created_at")
+  expiresAt         DateTime          @map("expires_at")
+  confirmedAt       DateTime?         @map("confirmed_at")
+  rejectedAt        DateTime?         @map("rejected_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId, status])
+  @@index([confirmationToken])
+  @@map("pending_appointment_edits")
+}
+
+enum PendingEditStatus {
+  pending
+  confirmed
+  rejected
+  expired
+}
+
+model AppointmentConfirmation {
+  id                String             @id @default(cuid())
+  appointmentId     String             @map("appointment_id")
+  confirmationToken String             @unique @map("confirmation_token")
+  status            ConfirmationStatus @default(pending)
+  confirmedAt       DateTime?          @map("confirmed_at")
+  canceledAt        DateTime?          @map("canceled_at")
+  expiresAt         DateTime           @map("expires_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+
+  @@index([appointmentId, status])
+  @@index([confirmationToken])
+  @@map("appointment_confirmations")
+}
+
+enum ConfirmationStatus {
+  pending
+  confirmed
+  canceled
+  expired
+}
+
+// ============================================
+// תשלומים (Payments)
+// ============================================
+
+model Payment {
+  id                   String            @id @default(cuid())
+  businessId           String            @map("business_id")
+  appointmentId        String?           @map("appointment_id")
+  provider             String            @default("quickpayments")
+  externalPaymentId    String?           @map("external_payment_id")
+  paymeSaleId          String?           @map("payme_sale_id")
+  paymeSaleCode        String?           @map("payme_sale_code")
+  paymeTransactionId   String?           @map("payme_transaction_id")
+  amountCents          Int               @map("amount_cents")
+  currency             String            @default("ILS")
+  status               PaymentStatusEnum
+  receiptUrl           String?           @map("receipt_url")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  updatedAt            DateTime          @updatedAt @map("updated_at")
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, status, createdAt])
+  @@index([paymeSaleId])
+  @@map("payments")
+}
+
+enum PaymentStatusEnum {
+  initiated
+  authorized
+  captured
+  failed
+  refunded
+}
+
+// ============================================
+// רשימת המתנה (Waitlist)
+// ============================================
+
+model WaitlistEntry {
+  id                 String          @id @default(cuid())
+  businessId         String          @map("business_id")
+  serviceId          String          @map("service_id")
+  staffId            String?         @map("staff_id")
+  branchId           String?         @map("branch_id")
+  customerId         String          @map("customer_id")
+  preferredDate      DateTime?       @map("preferred_date") @db.Date
+  preferredTimeRange String?         @map("preferred_time_range")
+  status             WaitlistStatus  @default(waiting)
+  offeredAt          DateTime?       @map("offered_at")
+  expiresAt          DateTime?       @map("expires_at")
+  appointmentId      String?         @map("appointment_id")
+  position           Int
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service  Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, serviceId, status])
+  @@index([customerId])
+  @@map("waitlist_entries")
+}
+
+enum WaitlistStatus {
+  waiting
+  offered
+  booked
+  expired
+  canceled
+}
+
+// ============================================
+// תורים חוזרים (Recurring Series)
+// ============================================
+
+model RecurringSeries {
+  id              String                @id @default(cuid())
+  businessId      String                @map("business_id")
+  serviceId       String                @map("service_id")
+  staffId         String?               @map("staff_id")
+  customerId      String                @map("customer_id")
+  recurrenceRule  String                @map("recurrence_rule")
+  startDate       DateTime              @map("start_date")
+  endDate         DateTime?             @map("end_date")
+  status          RecurringSeriesStatus @default(active)
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  business     Business      @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+
+  @@index([businessId, status])
+  @@map("recurring_series")
+}
+
+enum RecurringSeriesStatus {
+  active
+  paused
+  completed
+  canceled
+}
+
+// ============================================
+// התראות (Notifications)
+// ============================================
+
+model NotificationTemplate {
+  id         String              @id @default(cuid())
+  businessId String              @map("business_id")
+  channel    NotificationChannel
+  event      NotificationEvent
+  subject    String?
+  body       String
+  active     Boolean             @default(true)
+  createdAt  DateTime            @default(now()) @map("created_at")
+  updatedAt  DateTime            @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, channel, event])
+  @@map("notification_templates")
+}
+
+enum NotificationChannel {
+  email
+  sms
+  whatsapp
+  push
+}
+
+enum NotificationEvent {
+  booking_confirmed
+  booking_reminder
+  booking_canceled
+  booking_rescheduled
+  admin_new_booking
+  appointment_edit_request
+  appointment_confirmation
+}
+
+model Notification {
+  id                String              @id @default(cuid())
+  businessId        String              @map("business_id")
+  appointmentId     String?             @map("appointment_id")
+  customerId        String?             @map("customer_id")
+  channel           NotificationChannel
+  event             NotificationEvent
+  toAddress         String              @map("to_address")
+  status            NotificationStatus
+  providerMessageId String?             @map("provider_message_id")
+  sentAt            DateTime?           @map("sent_at")
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, event, status, sentAt])
+  @@map("notifications")
+}
+
+enum NotificationStatus {
+  queued
+  sent
+  failed
+}
+
+// התראות פנימיות לדשבורד
+model DashboardNotification {
+  id            String                    @id @default(cuid())
+  businessId    String                    @map("business_id")
+  appointmentId String?                   @map("appointment_id")
+  customerId    String?                   @map("customer_id")
+  type          DashboardNotificationType
+  title         String
+  message       String
+  read          Boolean                   @default(false)
+  createdAt     DateTime                  @default(now()) @map("created_at")
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  customer    Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  @@index([businessId, read, createdAt])
+  @@map("dashboard_notifications")
+}
+
+enum DashboardNotificationType {
+  new_appointment
+  cancelled_appointment
+  appointment_confirmed
+  appointment_canceled
+  reminder
+  system
+}
+
+// ============================================
+// אינטגרציות (Integrations)
+// ============================================
+
+model Integration {
+  id              String            @id @default(cuid())
+  businessId      String            @map("business_id")
+  type            IntegrationType
+  credentialsJson Json              @map("credentials_json")
+  status          IntegrationStatus
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, type])
+  @@map("integrations")
+}
+
+enum IntegrationType {
+  google_calendar
+  microsoft_outlook
+  apple_calendar
+  webhook
+}
+
+enum IntegrationStatus {
+  connected
+  error
+  disconnected
+}
+
+model Webhook {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  url        String
+  secret     String?
+  events     Json
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business    Business     @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  webhookLogs WebhookLog[]
+
+  @@index([businessId])
+  @@map("webhooks")
+}
+
+model WebhookLog {
+  id           String   @id @default(cuid())
+  webhookId    String   @map("webhook_id")
+  event        String
+  payloadJson  Json     @map("payload_json")
+  responseCode Int?     @map("response_code")
+  error        String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
+
+  @@index([webhookId, createdAt])
+  @@map("webhook_logs")
+}
+
+// ============================================
+// עמודים ציבוריים ואנליטיקה (Public Pages & Analytics)
+// ============================================
+
+model PublicPage {
+  id          String   @id @default(cuid())
+  businessId  String   @map("business_id")
+  slug        String
+  title       String
+  description String?
+  themeJson   Json?    @map("theme_json")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, slug])
+  @@map("public_pages")
+}
+
+model EventTracking {
+  id         String            @id @default(cuid())
+  businessId String            @map("business_id")
+  sessionId  String            @map("session_id")
+  event      TrackingEventType
+  metaJson   Json?             @map("meta_json")
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, event, createdAt])
+  @@map("event_tracking")
+}
+
+enum TrackingEventType {
+  view
+  select_branch
+  select_service
+  select_staff
+  slot_selected
+  form_submitted
+  booking_confirmed
+}
+
+// ============================================
+// הגדרות מערכת (System Settings)
+// ============================================
+
+model SystemSettings {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  isEncrypted Boolean  @default(false) @map("is_encrypted")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([key])
+  @@map("system_settings")
+}
+
+// הגדרות True Story יישמרו כ:
+// key: "truestory_instance_id", value: "..."
+// key: "truestory_token", value: "..." (encrypted)
+//
+// הגדרות Google SMTP יישמרו כ:
+// key: "smtp_host", value: "smtp.gmail.com"
+// key: "smtp_port", value: "587"
+// key: "smtp_secure", value: "false" (STARTTLS)
+// key: "smtp_user", value: "your-email@gmail.com"
+// key: "smtp_password", value: "..." (encrypted - App Password)
+// key: "smtp_from_name", value: "Clickynder"
+// key: "smtp_from_email", value: "your-email@gmail.com"
+
+
+// ============================================
+// Push Tokens (Mobile App)
+// ============================================
+
+model PushToken {
+  id         String   @id @default(cuid())
+  userId     String   @map("user_id")
+  token      String   @unique // ExponentPushToken[xxx]
+  platform   String   // ios / android
+  deviceName String?  @map("device_name")
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, active])
+  @@map("push_tokens")
+}
+
+// ============================================
+// קופונים (Coupons)
+// ============================================
+
+model Coupon {
+  id              String      @id @default(cuid())
+  businessId      String      @map("business_id")
+  code            String
+  discountType    DiscountType @map("discount_type")
+  discountValue   Int         @map("discount_value")
+  maxUses         Int?        @map("max_uses")
+  currentUses     Int         @default(0) @map("current_uses")
+  validFrom       DateTime?   @map("valid_from")
+  validUntil      DateTime?   @map("valid_until")
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, code])
+  @@index([businessId, active])
+  @@map("coupons")
+}
+
+enum DiscountType {
+  percentage
+  fixed_amount
+}
+
+// ============================================
+// משאבים (Resources - rooms, chairs, equipment)
+// ============================================
+
+model Resource {
+  id          String   @id @default(cuid())
+  businessId  String   @map("business_id")
+  name        String
+  type        String?
+  description String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, active])
+  @@map("resources")
+}

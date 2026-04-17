@@ -42,7 +42,14 @@ export async function GET(req: NextRequest) {
         color: s.color,
         description: s.description,
         active: s.active,
+        categoryId: s.categoryId,
         category: s.category ? { id: s.category.id, name: s.category.name } : null,
+        isGroup: s.isGroup,
+        maxParticipants: s.maxParticipants,
+        minParticipants: s.minParticipants,
+        waitlistEnabled: s.waitlistEnabled,
+        requirePayment: s.requirePayment,
+        depositOverrideCents: s.depositOverrideCents,
       })),
     });
   } catch (error) {
@@ -63,7 +70,11 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, durationMin, priceCents, bufferAfterMin, description, color, active, staffIds, categoryId } = body;
+    const {
+      name, durationMin, priceCents, bufferAfterMin, description, color, active,
+      staffIds, categoryId, isGroup, maxParticipants, minParticipants,
+      waitlistEnabled, requirePayment, depositOverrideCents,
+    } = body;
 
     if (!name || durationMin == null) {
       return NextResponse.json({ error: 'name and durationMin are required' }, { status: 400 });
@@ -74,12 +85,18 @@ export async function POST(req: NextRequest) {
         businessId: business.id,
         name,
         durationMin,
-        priceCents: priceCents ?? 0,
+        priceCents: priceCents ?? null,
         bufferAfterMin: bufferAfterMin ?? 0,
         description: description ?? null,
         color: color ?? null,
         active: active ?? true,
         categoryId: categoryId ?? null,
+        isGroup: isGroup ?? false,
+        maxParticipants: maxParticipants ?? null,
+        minParticipants: minParticipants ?? null,
+        waitlistEnabled: waitlistEnabled ?? false,
+        requirePayment: requirePayment ?? false,
+        depositOverrideCents: depositOverrideCents ?? null,
       },
     });
 

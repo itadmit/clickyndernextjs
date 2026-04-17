@@ -78,15 +78,9 @@ export async function PUT(
 
     const body = await req.json();
     const {
-      name,
-      durationMin,
-      priceCents,
-      bufferAfterMin,
-      description,
-      color,
-      active,
-      staffIds,
-      categoryId,
+      name, durationMin, priceCents, bufferAfterMin, description, color, active,
+      staffIds, categoryId, isGroup, maxParticipants, minParticipants,
+      waitlistEnabled, requirePayment, depositOverrideCents,
     } = body;
 
     const service = await prisma.service.update({
@@ -100,6 +94,12 @@ export async function PUT(
         ...(color !== undefined && { color }),
         ...(active !== undefined && { active }),
         ...(categoryId !== undefined && { categoryId }),
+        ...(isGroup !== undefined && { isGroup }),
+        ...(maxParticipants !== undefined && { maxParticipants }),
+        ...(minParticipants !== undefined && { minParticipants }),
+        ...(waitlistEnabled !== undefined && { waitlistEnabled }),
+        ...(requirePayment !== undefined && { requirePayment }),
+        ...(depositOverrideCents !== undefined && { depositOverrideCents }),
       },
     });
 

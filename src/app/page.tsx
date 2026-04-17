@@ -1136,7 +1136,7 @@ export default function HomePage() {
           </div>
 
           <div className="border-t border-gray-800 pt-8 text-center text-sm">
-            <p>© 2026 Clickinder (קליקינדר). כל הזכויות שמורות. V.3.0</p>
+            <p>© 2026 Clickinder (קליקינדר). כל הזכויות שמורות. V.3.1</p>
           </div>
         </div>
       </footer>

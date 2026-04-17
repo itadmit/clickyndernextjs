@@ -2,8 +2,7 @@
 // מבוסס על PostgreSQL עם תמיכה מלאה ב-Multi-Tenant
 
 generator client {
-  provider        = "prisma-client-js"
-  previewFeatures = ["driverAdapters"]
+  provider = "prisma-client-js"
 }
 
 datasource db {

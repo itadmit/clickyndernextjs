@@ -11,7 +11,7 @@ export function DashboardFooter() {
         <div className="flex flex-col md:flex-row items-center justify-between gap-3 text-sm text-gray-600">
           {/* Copyright */}
           <div className="text-center md:text-right">
-            © {new Date().getFullYear()} Clickinder. כל הזכויות שמורות. V.2.1
+            © {new Date().getFullYear()} Clickinder (קליקינדר). כל הזכויות שמורות. V.3.1
           </div>
 
           {/* Links */}

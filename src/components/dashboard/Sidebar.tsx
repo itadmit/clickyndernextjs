@@ -17,6 +17,8 @@ import {
   User,
   Menu,
   X,
+  Clock,
+  Repeat,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
@@ -43,9 +45,24 @@ const menuItems = [
     icon: Scissors,
   },
   {
+    title: 'שיעורים קבוצתיים',
+    href: '/dashboard/group-sessions',
+    icon: Users,
+  },
+  {
     title: 'תורים',
     href: '/dashboard/appointments',
     icon: Calendar,
+  },
+  {
+    title: 'רשימת המתנה',
+    href: '/dashboard/waitlist',
+    icon: Clock,
+  },
+  {
+    title: 'תורים חוזרים',
+    href: '/dashboard/recurring',
+    icon: Repeat,
   },
   {
     title: 'לקוחות',

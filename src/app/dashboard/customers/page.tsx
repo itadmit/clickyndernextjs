@@ -10,6 +10,9 @@ import {
   Mail,
   Calendar,
   Eye,
+  Plus,
+  X,
+  Loader2,
 } from 'lucide-react';
 
 interface Customer {
@@ -28,6 +31,15 @@ export default function CustomersPage() {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [newCustomer, setNewCustomer] = useState({
+    firstName: '',
+    lastName: '',
+    phone: '',
+    email: '',
+    notes: '',
+  });
 
   useEffect(() => {
     fetchCustomers();
@@ -59,6 +71,36 @@ export default function CustomersPage() {
     fetchCustomers(searchTerm);
   };
 
+  const handleCreateCustomer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomer.firstName || !newCustomer.phone) {
+      toast.error('שם פרטי וטלפון הם שדות חובה');
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const name = `${newCustomer.firstName} ${newCustomer.lastName}`.trim();
+      const response = await fetch('/api/customers', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          phone: newCustomer.phone,
+          email: newCustomer.email || undefined,
+        }),
+      });
+      if (!response.ok) throw new Error('Failed to create');
+      toast.success('הלקוח נוצר בהצלחה');
+      setShowNewModal(false);
+      setNewCustomer({ firstName: '', lastName: '', phone: '', email: '', notes: '' });
+      fetchCustomers(searchTerm || undefined);
+    } catch (error) {
+      toast.error('שגיאה ביצירת הלקוח');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const formatDate = (dateStr: string) => {
     const date = new Date(dateStr);
     return new Intl.DateTimeFormat('he-IL', {
@@ -76,6 +118,20 @@ export default function CustomersPage() {
       />
 
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-6">
+        {/* Header Actions */}
+        <div className="flex justify-between items-center">
+          <p className="text-sm text-gray-500">
+            {customers.length} לקוחות
+          </p>
+          <button
+            onClick={() => setShowNewModal(true)}
+            className="btn btn-primary"
+          >
+            <Plus className="w-4 h-4" />
+            <span>לקוח חדש</span>
+          </button>
+        </div>
+
         {/* Search Bar */}
         <div className="bg-white border border-gray-200 rounded-xl p-4">
           <form onSubmit={handleSearch} className="flex gap-3">
@@ -232,6 +288,111 @@ export default function CustomersPage() {
           )}
         </div>
       </div>
+
+      {/* New Customer Modal */}
+      {showNewModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">לקוח חדש</h3>
+              <button
+                onClick={() => setShowNewModal(false)}
+                className="p-1.5 hover:bg-gray-50 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4 text-gray-500" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCustomer} className="p-5 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    שם פרטי *
+                  </label>
+                  <input
+                    type="text"
+                    value={newCustomer.firstName}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, firstName: e.target.value })}
+                    className="form-input"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    שם משפחה
+                  </label>
+                  <input
+                    type="text"
+                    value={newCustomer.lastName}
+                    onChange={(e) => setNewCustomer({ ...newCustomer, lastName: e.target.value })}
+                    className="form-input"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  טלפון *
+                </label>
+                <input
+                  type="tel"
+                  value={newCustomer.phone}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                  className="form-input"
+                  placeholder="05X-XXXXXXX"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  אימייל
+                </label>
+                <input
+                  type="email"
+                  value={newCustomer.email}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })}
+                  className="form-input"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                  הערות
+                </label>
+                <textarea
+                  value={newCustomer.notes}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, notes: e.target.value })}
+                  className="form-input"
+                  rows={2}
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewModal(false)}
+                  className="btn btn-secondary"
+                >
+                  ביטול
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="btn btn-primary"
+                >
+                  {isSaving ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Plus className="w-4 h-4" />
+                  )}
+                  <span>צור לקוח</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

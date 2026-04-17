@@ -511,22 +511,12 @@ export function IntakeFormBuilder({ businessId, services }: IntakeFormBuilderPro
                         </div>
                       )}
 
-                      {/* PDF URL for pdf_consent */}
+                      {/* PDF Upload/URL for pdf_consent */}
                       {field.type === 'pdf_consent' && (
-                        <div>
-                          <label className="form-label text-xs">קישור למסמך PDF</label>
-                          <input
-                            type="url"
-                            value={field.fileUrl || ''}
-                            onChange={(e) =>
-                              updateField(index, { fileUrl: e.target.value || undefined })
-                            }
-                            className="form-input text-sm"
-                            placeholder="https://example.com/document.pdf"
-                            dir="ltr"
-                          />
-                          <p className="text-xs text-gray-400 mt-1">הלקוח יצטרך לסמן "קראתי ואני מסכים/ה"</p>
-                        </div>
+                        <PdfUploadField
+                          fileUrl={field.fileUrl}
+                          onUrlChange={(url) => updateField(index, { fileUrl: url || undefined })}
+                        />
                       )}
 
                       {/* Required toggle */}
@@ -800,6 +790,133 @@ export function IntakeFormBuilder({ businessId, services }: IntakeFormBuilderPro
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ==============================================
+// PDF Upload Component for Intake Form Builder
+// ==============================================
+
+interface PdfUploadFieldProps {
+  fileUrl?: string;
+  onUrlChange: (url: string) => void;
+}
+
+function PdfUploadField({ fileUrl, onUrlChange }: PdfUploadFieldProps) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [mode, setMode] = useState<'upload' | 'url'>(fileUrl && !fileUrl.includes('vercel') ? 'url' : 'upload');
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      toast.error('נא להעלות קובץ PDF בלבד');
+      return;
+    }
+
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('גודל הקובץ חייב להיות פחות מ-10MB');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'consent-pdfs');
+
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Upload failed');
+      }
+
+      const { url } = await res.json();
+      onUrlChange(url);
+      toast.success('הקובץ הועלה בהצלחה');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'שגיאה בהעלאת הקובץ');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      <label className="form-label text-xs">מסמך PDF</label>
+
+      <div className="flex gap-2 mb-2">
+        <button
+          type="button"
+          onClick={() => setMode('upload')}
+          className={`text-xs px-3 py-1 rounded-lg border transition-all ${
+            mode === 'upload' ? 'bg-primary-600 text-white border-primary-600' : 'border-gray-300 hover:border-primary-400'
+          }`}
+        >
+          <Upload className="w-3 h-3 inline ml-1" />
+          העלאה
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode('url')}
+          className={`text-xs px-3 py-1 rounded-lg border transition-all ${
+            mode === 'url' ? 'bg-primary-600 text-white border-primary-600' : 'border-gray-300 hover:border-primary-400'
+          }`}
+        >
+          קישור URL
+        </button>
+      </div>
+
+      {mode === 'upload' ? (
+        <div className="space-y-2">
+          {fileUrl ? (
+            <div className="flex items-center gap-2 p-2 bg-green-50 border border-green-200 rounded-lg">
+              <FileText className="w-4 h-4 text-green-600" />
+              <span className="text-sm text-green-700 flex-1 truncate">{fileUrl.split('/').pop()}</span>
+              <button
+                type="button"
+                onClick={() => onUrlChange('')}
+                className="text-red-500 hover:text-red-700 text-xs"
+              >
+                הסר
+              </button>
+            </div>
+          ) : (
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+              {isUploading ? (
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+                  <p className="text-xs text-gray-500">מעלה PDF...</p>
+                </div>
+              ) : (
+                <>
+                  <Upload className="w-6 h-6 text-gray-400 mx-auto mb-1" />
+                  <p className="text-xs text-gray-500 mb-2">העלה קובץ PDF (עד 10MB)</p>
+                  <input
+                    type="file"
+                    accept=".pdf"
+                    onChange={handleUpload}
+                    className="block mx-auto text-xs"
+                  />
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <input
+          type="url"
+          value={fileUrl || ''}
+          onChange={(e) => onUrlChange(e.target.value)}
+          className="form-input text-sm"
+          placeholder="https://example.com/document.pdf"
+          dir="ltr"
+        />
+      )}
+
+      <p className="text-xs text-gray-400 mt-1">הלקוח יצטרך לסמן &quot;קראתי ואני מסכים/ה&quot;</p>
     </div>
   );
 }

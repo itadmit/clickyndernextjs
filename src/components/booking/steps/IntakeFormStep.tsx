@@ -409,36 +409,7 @@ function FieldRenderer({
 
       {/* File Upload */}
       {field.type === 'file_upload' && (
-        <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-          {value ? (
-            <div className="flex items-center justify-center gap-2 text-sm text-green-600">
-              <Check className="w-4 h-4" />
-              <span>קובץ הועלה: {value.name || 'קובץ'}</span>
-              <button
-                type="button"
-                onClick={() => onChange(null)}
-                className="text-red-500 hover:text-red-700 mr-2"
-              >
-                הסר
-              </button>
-            </div>
-          ) : (
-            <>
-              <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-sm text-gray-500 mb-2">גרור קובץ לכאן או לחץ לבחירה</p>
-              <input
-                type="file"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    onChange({ name: file.name, size: file.size, type: file.type });
-                  }
-                }}
-                className="block mx-auto text-sm"
-              />
-            </>
-          )}
-        </div>
+        <FileUploadField value={value} onChange={onChange} />
       )}
 
       {/* PDF Consent */}
@@ -595,16 +566,33 @@ function SignaturePad({ signatureData, onChange, hasError }: SignaturePadProps) 
     [isDrawing]
   );
 
-  const stopDrawing = useCallback(() => {
+  const stopDrawing = useCallback(async () => {
     if (!isDrawing) return;
     setIsDrawing(false);
     setHasSignature(true);
 
-    // Save signature as data URL
     const canvas = canvasRef.current;
     if (canvas) {
-      const data = canvas.toDataURL('image/png');
-      onChange?.(data);
+      canvas.toBlob(async (blob) => {
+        if (!blob) return;
+        try {
+          const file = new File([blob], 'signature.png', { type: 'image/png' });
+          const formData = new FormData();
+          formData.append('file', file);
+          formData.append('folder', 'signatures');
+          const res = await fetch('/api/upload', { method: 'POST', body: formData });
+          if (res.ok) {
+            const { url } = await res.json();
+            onChange?.(url);
+          } else {
+            const fallback = canvas.toDataURL('image/png');
+            onChange?.(fallback);
+          }
+        } catch {
+          const fallback = canvas.toDataURL('image/png');
+          onChange?.(fallback);
+        }
+      }, 'image/png');
     }
   }, [isDrawing, onChange]);
 
@@ -653,6 +641,103 @@ function SignaturePad({ signatureData, onChange, hasError }: SignaturePadProps) 
         onTouchMove={draw}
         onTouchEnd={stopDrawing}
       />
+    </div>
+  );
+}
+
+// ==============================================
+// File Upload Component with Vercel Blob
+// ==============================================
+
+interface FileUploadFieldProps {
+  value: any;
+  onChange: (value: any) => void;
+}
+
+function FileUploadField({ value, onChange }: FileUploadFieldProps) {
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState('');
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setUploadError('הקובץ גדול מדי (מקסימום 10MB)');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'intake-files');
+
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Upload failed');
+      }
+
+      const { url } = await res.json();
+      onChange({ name: file.name, size: file.size, type: file.type, url });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'שגיאה בהעלאת הקובץ');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleRemove = async () => {
+    if (value?.url) {
+      try {
+        await fetch('/api/upload', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: value.url }),
+        });
+      } catch {}
+    }
+    onChange(null);
+  };
+
+  return (
+    <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+      {isUploading ? (
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-8 h-8 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-500">מעלה קובץ...</p>
+        </div>
+      ) : value?.url ? (
+        <div className="flex items-center justify-center gap-2 text-sm text-green-600">
+          <Check className="w-4 h-4" />
+          <span>קובץ הועלה: {value.name || 'קובץ'}</span>
+          <button
+            type="button"
+            onClick={handleRemove}
+            className="text-red-500 hover:text-red-700 mr-2"
+          >
+            הסר
+          </button>
+        </div>
+      ) : (
+        <>
+          <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+          <p className="text-sm text-gray-500 mb-2">גרור קובץ לכאן או לחץ לבחירה</p>
+          <p className="text-xs text-gray-400 mb-2">תמונות, PDF - עד 10MB</p>
+          <input
+            type="file"
+            accept="image/*,.pdf"
+            onChange={handleUpload}
+            className="block mx-auto text-sm"
+          />
+          {uploadError && (
+            <p className="text-sm text-red-500 mt-2">{uploadError}</p>
+          )}
+        </>
+      )}
     </div>
   );
 }

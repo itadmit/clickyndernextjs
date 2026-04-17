@@ -66,13 +66,11 @@ export function BookingPageDesign({ business }: BookingPageDesignProps) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file type
     if (!file.type.startsWith('image/')) {
       toast.error('נא להעלות קובץ תמונה בלבד');
       return;
     }
 
-    // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
       toast.error('גודל הקובץ חייב להיות פחות מ-5MB');
       return;
@@ -81,15 +79,21 @@ export function BookingPageDesign({ business }: BookingPageDesignProps) {
     setIsUploadingLogo(true);
 
     try {
-      // For now, we'll use a placeholder. In production, upload to cloud storage
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, logoUrl: reader.result as string }));
-        toast.success('הלוגו הועלה בהצלחה! זכור לשמור את השינויים');
-      };
-      reader.readAsDataURL(file);
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      uploadData.append('folder', `logos/${business.id}`);
+
+      const res = await fetch('/api/upload', { method: 'POST', body: uploadData });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || 'Upload failed');
+      }
+
+      const { url } = await res.json();
+      setFormData((prev) => ({ ...prev, logoUrl: url }));
+      toast.success('הלוגו הועלה בהצלחה! זכור לשמור את השינויים');
     } catch (error) {
-      toast.error('שגיאה בהעלאת הלוגו');
+      toast.error(error instanceof Error ? error.message : 'שגיאה בהעלאת הלוגו');
     } finally {
       setIsUploadingLogo(false);
     }

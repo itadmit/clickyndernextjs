@@ -20,7 +20,6 @@ if (typeof globalThis.File === 'undefined') {
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
-  output: 'standalone',
   experimental: {
     serverComponentsExternalPackages: ['expo-server-sdk'],
   },

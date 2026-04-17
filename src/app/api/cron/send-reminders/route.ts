@@ -12,13 +12,21 @@ import { sendWhatsAppMessage } from '@/lib/notifications/rappelsend';
  * דוגמה עם crontab (להריץ כל 15 דקות):
  * curl -X POST https://clickynder.com/api/cron/send-reminders -H "Authorization: Bearer YOUR_SECRET_KEY"
  */
+export const maxDuration = 60;
+
+function verifyAuth(req: NextRequest): boolean {
+  const authHeader = req.headers.get('authorization');
+  const expectedToken = process.env.CRON_SECRET_KEY;
+  const expectedCronSecret = process.env.CRON_SECRET;
+
+  if (expectedToken && authHeader === `Bearer ${expectedToken}`) return true;
+  if (expectedCronSecret && authHeader === `Bearer ${expectedCronSecret}`) return true;
+  return false;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // אימות (להגנה על ה-endpoint)
-    const authHeader = req.headers.get('authorization');
-    const expectedToken = process.env.CRON_SECRET_KEY;
-    
-    if (!expectedToken || authHeader !== `Bearer ${expectedToken}`) {
+    if (!verifyAuth(req)) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -254,13 +262,14 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// GET endpoint למידע על ה-cron
 export async function GET(req: NextRequest) {
+  if (verifyAuth(req)) {
+    return POST(req);
+  }
+
   return NextResponse.json({
     message: 'Reminders Cron Job Endpoint',
-    usage: 'POST with Authorization: Bearer YOUR_SECRET_KEY',
-    schedule: 'Run every 15-60 minutes',
-    example: 'curl -X POST https://clickynder.com/api/cron/send-reminders -H "Authorization: Bearer YOUR_SECRET_KEY"',
+    schedule: 'Runs every 15 minutes via Vercel Cron',
   });
 }
 

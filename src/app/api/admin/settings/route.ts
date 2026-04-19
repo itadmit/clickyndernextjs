@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     const { key, value, description, isEncrypted } = await request.json();
 
-    if (!key || !value) {
+    if (!key || value === undefined || value === null) {
       return NextResponse.json({ error: 'Key and value are required' }, { status: 400 });
     }
 

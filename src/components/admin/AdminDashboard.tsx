@@ -44,7 +44,7 @@ export function AdminDashboard({ users: initialUsers, systemSettings: initialSet
   const [sendingTest, setSendingTest] = useState(false);
   const [testPhone, setTestPhone] = useState('');
   const [editingUser, setEditingUser] = useState<UserWithBusinesses | null>(null);
-  const [showToken, setShowToken] = useState(false);
+  const [showToken, setShowToken] = useState(true);
 
   const filteredUsers = users.filter(
     (user) =>
@@ -489,7 +489,10 @@ export function AdminDashboard({ users: initialUsers, systemSettings: initialSet
                     <input
                       type="text"
                       defaultValue={getIBotInstanceId()}
-                      onBlur={(e) => handleUpdateSystemSetting('ibot_instance_id', e.target.value)}
+                      onBlur={(e) => {
+                        const val = e.target.value.trim();
+                        if (val && val !== getIBotInstanceId()) handleUpdateSystemSetting('ibot_instance_id', val);
+                      }}
                       className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 focus:bg-white transition-all outline-none"
                       placeholder="Instance ID מ-iBot Chat"
                       dir="ltr"
@@ -505,7 +508,10 @@ export function AdminDashboard({ users: initialUsers, systemSettings: initialSet
                       <input
                         type={showToken ? 'text' : 'password'}
                         defaultValue={getIBotToken()}
-                        onBlur={(e) => handleUpdateSystemSetting('ibot_token', e.target.value)}
+                        onBlur={(e) => {
+                          const val = e.target.value.trim();
+                          if (val && val !== getIBotToken()) handleUpdateSystemSetting('ibot_token', val);
+                        }}
                         className="w-full px-4 py-2.5 pl-10 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 focus:bg-white transition-all outline-none"
                         placeholder="API Token מ-iBot Chat"
                         dir="ltr"

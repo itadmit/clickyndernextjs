@@ -190,6 +190,39 @@ export async function sendPushToToken(
 }
 
 /**
+ * שליחת Push ללקוח לפי customerId (אם מקושר ל-User)
+ */
+export async function sendPushToCustomer(
+  customerId: string,
+  title: string,
+  body: string,
+  data?: Record<string, any>
+): Promise<boolean> {
+  try {
+    const customer = await prisma.customer.findUnique({
+      where: { id: customerId },
+      select: { userId: true },
+    });
+
+    if (!customer?.userId) {
+      return false;
+    }
+
+    const result = await sendPushToUser({
+      userId: customer.userId,
+      title,
+      body,
+      data,
+    });
+
+    return result.success;
+  } catch (error) {
+    console.error('Error sending push to customer:', error);
+    return false;
+  }
+}
+
+/**
  * שליחת Push לבעל עסק לפי businessId
  */
 export async function sendPushToBusinessOwner(

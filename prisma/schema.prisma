@@ -78,6 +78,7 @@ model User {
   ownedBusinesses Business[]       @relation("BusinessOwner")
   memberships     BusinessMember[]
   pushTokens      PushToken[]
+  customerProfiles Customer[]
 
   @@index([email])
   @@index([phone])
@@ -153,6 +154,7 @@ model Business {
   // Relations
   owner                  User                    @relation("BusinessOwner", fields: [ownerUserId], references: [id], onDelete: Cascade)
   members                BusinessMember[]
+  invites                BusinessInvite[]
   branches               Branch[]
   staff                  Staff[]
   serviceCategories      ServiceCategory[]
@@ -690,6 +692,7 @@ enum RoundingStrategy {
 model Customer {
   id         String   @id @default(cuid())
   businessId String   @map("business_id")
+  userId     String?  @map("user_id")
   firstName  String   @map("first_name")
   lastName   String   @map("last_name")
   phone      String
@@ -699,6 +702,7 @@ model Customer {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   business               Business                @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  user                   User?                   @relation(fields: [userId], references: [id], onDelete: SetNull)
   appointments           Appointment[]
   notifications          Notification[]
   dashboardNotifications DashboardNotification[]
@@ -706,6 +710,7 @@ model Customer {
 
   @@index([businessId, phone])
   @@index([businessId, email])
+  @@index([userId])
   @@map("customers")
 }
 
@@ -1249,4 +1254,58 @@ model Resource {
 
   @@index([businessId, active])
   @@map("resources")
+}
+
+// ============================================
+// OTP Codes (WhatsApp Login)
+// ============================================
+
+model OtpCode {
+  id        String   @id @default(cuid())
+  phone     String
+  code      String
+  expiresAt DateTime @map("expires_at")
+  verified  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([phone, code])
+  @@map("otp_codes")
+}
+
+// ============================================
+// Business Invites (Customer Invitation Links)
+// ============================================
+
+model BusinessInvite {
+  id         String    @id @default(cuid())
+  businessId String    @map("business_id")
+  token      String    @unique
+  expiresAt  DateTime? @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@map("business_invites")
+}
+
+// ============================================
+// Customer Notifications (In-App Popups)
+// ============================================
+
+model CustomerNotification {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  businessId    String    @map("business_id")
+  appointmentId String?   @map("appointment_id")
+  type          String    // reminder, arrival_confirmation, general
+  title         String
+  message       String
+  acknowledged  Boolean   @default(false)
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@index([userId, acknowledged])
+  @@index([businessId])
+  @@map("customer_notifications")
 }

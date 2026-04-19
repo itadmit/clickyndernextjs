@@ -117,10 +117,11 @@ export async function loginMobile(identifier: string, password: string): Promise
       slug: string;
       logoUrl: string | null;
     } | null;
+    customerBusinesses: { id: string; name: string; slug: string; logoUrl: string | null }[];
+    role: 'owner' | 'customer' | 'both' | 'none';
   };
 }> {
   try {
-    // בדיקה אם זה אימייל או טלפון
     const isEmail = identifier.includes('@');
     
     const user = await prisma.user.findUnique({
@@ -153,19 +154,31 @@ export async function loginMobile(identifier: string, password: string): Promise
       return { success: false, error: 'סיסמה שגויה' };
     }
 
-    // בדיקה שיש לו עסק
     const business = user.ownedBusinesses[0] || null;
 
-    // עדכון זמן התחברות
     await prisma.user.update({
       where: { id: user.id },
       data: { lastLoginAt: new Date() },
     });
 
-    // יצירת טוקנים
     const email = user.email || '';
     const accessToken = await generateAccessToken(user.id, email);
     const refreshToken = await generateRefreshToken(user.id, email);
+
+    const customerRecords = await prisma.customer.findMany({
+      where: { userId: user.id },
+      include: {
+        business: {
+          select: { id: true, name: true, slug: true, logoUrl: true },
+        },
+      },
+    });
+    const customerBusinesses = customerRecords.map((c) => c.business);
+
+    let role: 'owner' | 'customer' | 'both' | 'none' = 'none';
+    if (business && customerBusinesses.length > 0) role = 'both';
+    else if (business) role = 'owner';
+    else if (customerBusinesses.length > 0) role = 'customer';
 
     return {
       success: true,
@@ -180,6 +193,8 @@ export async function loginMobile(identifier: string, password: string): Promise
           image: user.image,
         },
         business,
+        customerBusinesses,
+        role,
       },
     };
   } catch (error) {

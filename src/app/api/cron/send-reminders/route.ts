@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { sendPushToBusinessOwner } from '@/lib/notifications/push-service';
+import { sendPushToBusinessOwner, sendPushToCustomer } from '@/lib/notifications/push-service';
 import { sendAppointmentReminder, sendMultiChannelNotification } from '@/lib/notifications/notification-service';
 import { sendWhatsAppMessage } from '@/lib/notifications/rappelsend';
 
@@ -108,6 +108,28 @@ export async function POST(req: NextRequest) {
                   `ל${appointment.customer.firstName} ${appointment.customer.lastName} יש תור ל${appointment.service.name} ב-${aptDate} ${aptTime}`,
                   { type: 'reminder', appointmentId: appointment.id }
                 ).catch((err) => console.error('Push reminder error:', err));
+
+                // Push reminder to customer (if linked to a User)
+                sendPushToCustomer(
+                  appointment.customerId,
+                  `🔔 תזכורת: תור ל${appointment.service.name}`,
+                  `${aptDate} בשעה ${aptTime} אצל ${business.name}`,
+                  { type: 'customer_reminder', appointmentId: appointment.id, businessId: business.id }
+                ).catch((err) => console.error('Customer push reminder error:', err));
+
+                // Create in-app notification for customer
+                if (appointment.customer.userId) {
+                  prisma.customerNotification.create({
+                    data: {
+                      userId: appointment.customer.userId,
+                      businessId: business.id,
+                      appointmentId: appointment.id,
+                      type: 'reminder',
+                      title: `תזכורת: תור ל${appointment.service.name}`,
+                      message: `${aptDate} בשעה ${aptTime} אצל ${business.name}`,
+                    },
+                  }).catch((err) => console.error('Customer notification create error:', err));
+                }
 
                 results.reminders++;
                 console.log(`✅ Reminder sent for appointment ${appointment.id}`);
@@ -233,6 +255,27 @@ export async function POST(req: NextRequest) {
                   );
                   results.confirmations++;
                   console.log(`✅ Confirmation request sent for appointment ${appointment.id}`);
+                }
+
+                // Push arrival confirmation to customer
+                if (appointment.customer.userId) {
+                  sendPushToCustomer(
+                    appointment.customerId,
+                    `📍 אישור הגעה: ${appointment.service.name}`,
+                    `האם אתה מגיע? ${variables.appointment_date} בשעה ${variables.appointment_time}`,
+                    { type: 'arrival_confirmation', confirmationToken, appointmentId: appointment.id, businessId: business.id }
+                  ).catch((err) => console.error('Customer push confirmation error:', err));
+
+                  prisma.customerNotification.create({
+                    data: {
+                      userId: appointment.customer.userId,
+                      businessId: business.id,
+                      appointmentId: appointment.id,
+                      type: 'arrival_confirmation',
+                      title: `אישור הגעה: ${appointment.service.name}`,
+                      message: `${variables.appointment_date} בשעה ${variables.appointment_time} אצל ${business.name}`,
+                    },
+                  }).catch((err) => console.error('Customer notification create error:', err));
                 }
               }
             } catch (error) {

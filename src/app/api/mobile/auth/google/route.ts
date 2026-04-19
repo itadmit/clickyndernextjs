@@ -138,6 +138,29 @@ export async function POST(req: NextRequest) {
     const accessToken = await generateAccessToken(user.id, email);
     const refreshToken = await generateRefreshToken(user.id, email);
 
+    // Auto-link existing Customer records by email
+    if (user.email) {
+      await prisma.customer.updateMany({
+        where: { email: user.email, userId: null },
+        data: { userId: user.id },
+      });
+    }
+
+    const customerRecords = await prisma.customer.findMany({
+      where: { userId: user.id },
+      include: {
+        business: {
+          select: { id: true, name: true, slug: true, logoUrl: true },
+        },
+      },
+    });
+    const customerBusinesses = customerRecords.map((c) => c.business);
+
+    let role: 'owner' | 'customer' | 'both' | 'none' = 'none';
+    if (business && customerBusinesses.length > 0) role = 'both';
+    else if (business) role = 'owner';
+    else if (customerBusinesses.length > 0) role = 'customer';
+
     return NextResponse.json({
       accessToken,
       refreshToken,
@@ -149,6 +172,8 @@ export async function POST(req: NextRequest) {
         isSuperAdmin: (user as any).isSuperAdmin ?? false,
       },
       business,
+      customerBusinesses,
+      role,
     });
   } catch (error) {
     console.error('[Google Auth] Error:', error);

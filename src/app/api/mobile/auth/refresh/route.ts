@@ -56,6 +56,23 @@ export async function POST(req: NextRequest) {
     const newAccessToken = await generateAccessToken(user.id, email);
     const newRefreshToken = await generateRefreshToken(user.id, email);
 
+    const business = user.ownedBusinesses[0] || null;
+
+    const customerRecords = await prisma.customer.findMany({
+      where: { userId: user.id },
+      include: {
+        business: {
+          select: { id: true, name: true, slug: true, logoUrl: true },
+        },
+      },
+    });
+    const customerBusinesses = customerRecords.map((c) => c.business);
+
+    let role: 'owner' | 'customer' | 'both' | 'none' = 'none';
+    if (business && customerBusinesses.length > 0) role = 'both';
+    else if (business) role = 'owner';
+    else if (customerBusinesses.length > 0) role = 'customer';
+
     return NextResponse.json({
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
@@ -66,7 +83,9 @@ export async function POST(req: NextRequest) {
         phone: user.phone,
         image: user.image,
       },
-      business: user.ownedBusinesses[0] || null,
+      business,
+      customerBusinesses,
+      role,
     });
   } catch (error) {
     console.error('Token refresh error:', error);

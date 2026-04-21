@@ -19,6 +19,7 @@ import {
   X,
   Clock,
   Repeat,
+  Shield,
 } from 'lucide-react';
 import { signOut } from 'next-auth/react';
 import { cn } from '@/lib/utils';
@@ -90,9 +91,10 @@ interface SidebarProps {
   onToggle?: () => void;
   businessName?: string;
   businessLogo?: string | null;
+  isSuperAdmin?: boolean;
 }
 
-export function Sidebar({ onToggle, businessName, businessLogo }: SidebarProps = {}) {
+export function Sidebar({ onToggle, businessName, businessLogo, isSuperAdmin }: SidebarProps = {}) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [highlightedPath, setHighlightedPath] = useState<string | null>(null);
@@ -224,8 +226,22 @@ export function Sidebar({ onToggle, businessName, businessLogo }: SidebarProps =
         </ul>
       </nav>
 
-      {/* Logout */}
-      <div className="p-3 border-t border-gray-100">
+      {/* Super Admin + Logout */}
+      <div className="p-3 border-t border-gray-100 space-y-1">
+        {isSuperAdmin && (
+          <Link
+            href="/admin"
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all w-full text-sm',
+              pathname === '/admin'
+                ? 'bg-purple-50 text-purple-700 font-medium'
+                : 'text-purple-600 hover:bg-purple-50 hover:text-purple-700'
+            )}
+          >
+            <Shield className="w-[18px] h-[18px]" />
+            <span>ניהול מערכת</span>
+          </Link>
+        )}
         <button
           onClick={handleLogout}
           className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-gray-500 hover:bg-gray-50 hover:text-gray-700 transition-all w-full text-sm"

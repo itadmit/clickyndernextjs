@@ -37,27 +37,14 @@ export default async function DashboardLayout({
     },
   });
 
-  // אם אין עסק, בדוק אם זה משתמש Google חדש
   if (!business) {
-    // בדוק אם למשתמש יש Google account - רק משתמשי Google חדשים צריכים להשלים הרשמה
-    const userWithAccounts = await prisma.user.findUnique({
-      where: { id: session.user.id },
-      include: {
-        accounts: {
-          where: { provider: 'google' },
-          select: { id: true }
-        }
-      }
-    });
-
-    // רק אם יש Google account (משתמש Google חדש) ונכנס דרך Google, הפנה להשלמה
-    // משתמשים קיימים שהתחברו דרך credentials לא יועברו לדף ההשלמה
-    if (userWithAccounts && userWithAccounts.accounts.length > 0) {
-      redirect('/auth/register?complete=true');
-    }
-    // אם זה משתמש רגיל (credentials) בלי עסק, תן לו לגשת לדשבורד
-    // (או אפשר להציג הודעה שהוא צריך ליצור עסק)
+    redirect('/auth/register');
   }
+
+  const currentUser = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { isSuperAdmin: true },
+  });
 
   const sub = business?.subscription;
   const isTrialExpired =
@@ -68,7 +55,7 @@ export default async function DashboardLayout({
   return (
     <BusinessProvider business={{ name: business?.name, logoUrl: business?.logoUrl, slug: business?.slug }}>
       <div className="flex min-h-screen bg-gray-50 w-full overflow-x-hidden">
-        <Sidebar businessName={business?.name} businessLogo={business?.logoUrl} />
+        <Sidebar businessName={business?.name} businessLogo={business?.logoUrl} isSuperAdmin={currentUser?.isSuperAdmin || false} />
 
         <main className="flex-1 min-w-0 lg:mr-64 w-full flex flex-col">
           <div className="flex-1">

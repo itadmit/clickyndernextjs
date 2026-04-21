@@ -146,7 +146,7 @@ export async function loginMobile(identifier: string, password: string): Promise
     }
 
     if (!user.passwordHash) {
-      return { success: false, error: 'משתמש זה נרשם דרך Google. אנא התחבר דרך Google' };
+      return { success: false, error: 'לא הוגדרה סיסמה למשתמש זה. אנא התחבר באמצעות קוד OTP' };
     }
 
     const isPasswordValid = await compare(password, user.passwordHash);

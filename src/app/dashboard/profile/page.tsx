@@ -21,10 +21,6 @@ export default async function ProfilePage() {
       phone: true,
       createdAt: true,
       passwordHash: true,
-      accounts: {
-        where: { provider: 'google' },
-        select: { provider: true },
-      },
     },
   });
 
@@ -48,7 +44,6 @@ export default async function ProfilePage() {
             createdAt: user.createdAt,
           }}
           hasPassword={!!user.passwordHash}
-          isGoogleUser={user.accounts.length > 0}
         />
       </div>
     </div>

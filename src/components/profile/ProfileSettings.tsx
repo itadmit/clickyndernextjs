@@ -14,10 +14,9 @@ interface ProfileSettingsProps {
     createdAt: Date;
   };
   hasPassword: boolean;
-  isGoogleUser: boolean;
 }
 
-export function ProfileSettings({ user, hasPassword, isGoogleUser }: ProfileSettingsProps) {
+export function ProfileSettings({ user, hasPassword }: ProfileSettingsProps) {
   const router = useRouter();
   const [formData, setFormData] = useState({
     name: user.name || '',
@@ -289,13 +288,6 @@ export function ProfileSettings({ user, hasPassword, isGoogleUser }: ProfileSett
         </div>
 
         <form onSubmit={handlePasswordChange} className="p-5 space-y-5">
-          {/* Info for Google users without password */}
-          {isGoogleUser && !hasPassword && (
-            <div className="px-4 py-3 rounded-lg text-sm bg-blue-50 text-blue-800 border border-blue-200">
-              נרשמת באמצעות Google. באפשרותך להגדיר סיסמה כדי להתחבר גם עם אימייל וסיסמה.
-            </div>
-          )}
-
           {/* Current Password - only if user already has one */}
           {hasPassword && (
             <div>

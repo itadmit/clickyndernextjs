@@ -4,13 +4,24 @@ import { sendWhatsAppMessage, normalizePhoneNumber } from '@/lib/notifications/r
 
 export async function POST(req: NextRequest) {
   try {
-    const { phone } = await req.json();
+    const { phone, mode } = await req.json();
 
     if (!phone) {
       return NextResponse.json({ error: 'מספר טלפון נדרש' }, { status: 400 });
     }
 
     const normalizedPhone = normalizePhoneNumber(phone);
+
+    // In login mode, check if user exists first
+    if (mode === 'login') {
+      const existingUser = await prisma.user.findUnique({
+        where: { phone: normalizedPhone },
+      });
+
+      if (!existingUser) {
+        return NextResponse.json({ userExists: false, phone: normalizedPhone }, { status: 200 });
+      }
+    }
 
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     const recentAttempts = await prisma.otpCode.count({

@@ -16,6 +16,7 @@ export default function SignInPage() {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [showNotRegistered, setShowNotRegistered] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -40,6 +41,7 @@ export default function SignInPage() {
 
   const handleSendOtp = async (e?: React.FormEvent) => {
     e?.preventDefault();
+    setShowNotRegistered(false);
 
     if (!phone || phone.replace(/\D/g, '').length < 9) {
       toast.error('נא להזין מספר טלפון תקין');
@@ -51,13 +53,18 @@ export default function SignInPage() {
       const res = await fetch('/api/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ phone, mode: 'login' }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
         toast.error(data.error || 'שגיאה בשליחת קוד');
+        return;
+      }
+
+      if (data.userExists === false) {
+        setShowNotRegistered(true);
         return;
       }
 
@@ -237,7 +244,7 @@ export default function SignInPage() {
                       id="phone"
                       type="tel"
                       value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
+                      onChange={(e) => { setPhone(e.target.value); setShowNotRegistered(false); }}
                       className="w-full pr-10 pl-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-lg"
                       placeholder="050-1234567"
                       required
@@ -247,6 +254,19 @@ export default function SignInPage() {
                   </div>
                 </div>
 
+                {showNotRegistered && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-center">
+                    <p className="text-amber-800 font-medium mb-1">מספר זה עדיין לא רשום במערכת</p>
+                    <p className="text-amber-700 text-sm mb-3">רוצה ליצור חשבון חדש עם המספר הזה?</p>
+                    <Link
+                      href="/auth/register"
+                      className="inline-block bg-amber-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors"
+                    >
+                      הרשם עכשיו
+                    </Link>
+                  </div>
+                )}
+
                 <button
                   type="submit"
                   className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
@@ -255,7 +275,7 @@ export default function SignInPage() {
                   {isLoading ? (
                     <div className="flex items-center justify-center gap-2">
                       <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>שולח קוד...</span>
+                      <span>בודק...</span>
                     </div>
                   ) : (
                     'שלח קוד אימות'

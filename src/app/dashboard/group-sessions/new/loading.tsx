@@ -1,11 +1,11 @@
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { FormPageSkeleton } from '@/components/ui/Skeleton';
 
-export default function EditStaffLoading() {
+export default function NewGroupSessionLoading() {
   return (
     <div>
       <DashboardHeader
-        title="עריכת עובד"
+        title="יצירת שיעור קבוצתי"
         subtitle="טוען..."
       />
       <FormPageSkeleton />

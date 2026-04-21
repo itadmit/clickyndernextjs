@@ -1,14 +1,14 @@
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { FormPageSkeleton } from '@/components/ui/Skeleton';
+import { ListPageSkeleton } from '@/components/ui/Skeleton';
 
-export default function EditStaffLoading() {
+export default function RecurringLoading() {
   return (
     <div>
       <DashboardHeader
-        title="עריכת עובד"
+        title="תורים חוזרים"
         subtitle="טוען..."
       />
-      <FormPageSkeleton />
+      <ListPageSkeleton />
     </div>
   );
 }

@@ -1,109 +1,159 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'react-hot-toast';
-import { Mail, Lock, Eye, EyeOff, Calendar, Users, Clock } from 'lucide-react';
+import { Phone, Calendar, Users, Clock, ArrowRight } from 'lucide-react';
 
 export default function SignInPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
-  const [identifier, setIdentifier] = useState(''); // Can be email or phone
-  const [password, setPassword] = useState('');
+  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [phone, setPhone] = useState('');
+  const [normalizedPhone, setNormalizedPhone] = useState('');
+  const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Handle callback errors and check for Google signup completion
+  // Countdown timer for resend
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const error = urlParams.get('error');
-    const callbackUrl = urlParams.get('callbackUrl');
-    
-    // אם יש שגיאת callback, הצג הודעה
-    if (error === 'Callback') {
-      toast.error('שגיאה בהתחברות עם Google. אנא נסה שוב.');
-      // נקה את ה-URL
-      router.replace('/auth/signin');
-    }
-    
-    // טיפול בשגיאת OAuthAccountNotLinked - זה אמור להיות מתוקן כעת
-    if (error === 'OAuthAccountNotLinked') {
-      toast.error('החשבון כבר מקושר למשתמש אחר. אנא נסה להתחבר עם הסיסמה שלך או נסה שוב.');
-      router.replace('/auth/signin');
-    }
-    
-    // אם יש callbackUrl עם complete=true, זה השלמת הרשמה דרך Google
-    if (callbackUrl && callbackUrl.includes('complete=true')) {
-      // נבדוק אם המשתמש כבר authenticated
-      if (status === 'authenticated' && session) {
-        router.push('/auth/register?complete=true');
-      }
-    }
-  }, [router, status, session]);
+    if (countdown <= 0) return;
+    const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [countdown]);
 
   // Redirect if already logged in
   useEffect(() => {
     if (status === 'authenticated' && session) {
-      const urlParams = new URLSearchParams(window.location.search);
-      const callbackUrl = urlParams.get('callbackUrl');
-      
-      // אם זה השלמת הרשמה, אל תפנה לדשבורד
-      if (callbackUrl && callbackUrl.includes('complete=true')) {
-        router.push('/auth/register?complete=true');
-        return;
-      }
-      
-      // בדוק אם יש עסק למשתמש
-      // אם hasBusiness לא קיים עדיין, זה אומר שה-session עדיין לא מעודכן
-      // במקרה כזה, נחכה או פשוט נפנה לדשבורד - הוא יידע לטפל בזה
       const hasBusiness = (session.user as any)?.hasBusiness;
-      
-      // אם יש מידע על hasBusiness ואכן אין עסק, הפנה לדף ההשלמה
-      // אבל רק אם זה משתמש Google (isGoogleUser) או שהמשתמש בחר בכך
       if (hasBusiness === false) {
-        // בדוק אם זה משתמש Google - רק אז נפנה להשלמה
-        const isGoogleUser = (session.user as any)?.isGoogleUser;
-        if (isGoogleUser) {
-          router.push('/auth/register?complete=true');
-          return;
-        }
+        router.push('/auth/register?complete=true');
+      } else {
+        router.push('/dashboard');
       }
-      
-      // ברירת מחדל: פנה לדשבורד (הוא יידע לטפל ב-redirect אם צריך)
-      router.push('/dashboard');
     }
   }, [status, session, router]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
+  const handleSendOtp = async (e?: React.FormEvent) => {
+    e?.preventDefault();
 
+    if (!phone || phone.replace(/\D/g, '').length < 9) {
+      toast.error('נא להזין מספר טלפון תקין');
+      return;
+    }
+
+    setIsLoading(true);
     try {
-      const result = await signIn('credentials', {
-        identifier: identifier.trim().toLowerCase(),
-        password,
-        redirect: false,
+      const res = await fetch('/api/auth/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
       });
 
-      if (result?.error) {
-        toast.error(result.error);
-      } else {
-        toast.success('התחברת בהצלחה!');
-        // רענן את ה-session ואז פנה לדשבורד
-        // השתמש ב-reload כדי לוודא שה-session מעודכן
-        window.location.href = '/dashboard';
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'שגיאה בשליחת קוד');
+        return;
       }
-    } catch (error) {
-      toast.error('אירעה שגיאה בהתחברות');
+
+      setNormalizedPhone(data.phone);
+      setStep('otp');
+      setCountdown(60);
+      toast.success('קוד אימות נשלח בוואטסאפ');
+
+      setTimeout(() => otpRefs.current[0]?.focus(), 100);
+    } catch {
+      toast.error('שגיאה בשליחת קוד');
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Show loading while checking session
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
+
+    const newOtp = [...otp];
+    newOtp[index] = value.slice(-1);
+    setOtp(newOtp);
+
+    if (value && index < 5) {
+      otpRefs.current[index + 1]?.focus();
+    }
+
+    // Auto-submit when all 6 digits filled
+    const fullCode = newOtp.join('');
+    if (fullCode.length === 6) {
+      handleVerifyOtp(fullCode);
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !otp[index] && index > 0) {
+      otpRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pastedData.length === 0) return;
+
+    const newOtp = [...otp];
+    for (let i = 0; i < pastedData.length; i++) {
+      newOtp[i] = pastedData[i];
+    }
+    setOtp(newOtp);
+
+    if (pastedData.length === 6) {
+      handleVerifyOtp(pastedData);
+    } else {
+      otpRefs.current[pastedData.length]?.focus();
+    }
+  };
+
+  const handleVerifyOtp = async (code: string) => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/auth/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: normalizedPhone, code }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.error || 'קוד שגוי');
+        setOtp(['', '', '', '', '', '']);
+        otpRefs.current[0]?.focus();
+        return;
+      }
+
+      // Sign in via NextAuth with the verification token
+      const result = await signIn('credentials', {
+        phone: normalizedPhone,
+        verificationToken: data.verificationToken,
+        redirect: false,
+      });
+
+      if (result?.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success('התחברת בהצלחה!');
+      window.location.href = '/dashboard';
+    } catch {
+      toast.error('שגיאה באימות קוד');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (status === 'loading') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -115,7 +165,6 @@ export default function SignInPage() {
     );
   }
 
-  // Don't render if authenticated (will redirect)
   if (status === 'authenticated') {
     return null;
   }
@@ -132,145 +181,126 @@ export default function SignInPage() {
             </Link>
           </div>
 
-          {/* Header */}
-          <div className="text-center">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">
-              התחבר לחשבון שלך
-            </h2>
-            <p className="text-gray-600">
-              ברוך שובך! בחר את שיטת ההתחברות:
-            </p>
-          </div>
-
-          {/* Social Login Buttons */}
-          <div className="flex justify-center">
-            <button
-              type="button"
-              onClick={async () => {
-                try {
-                  console.log('🔐 Clicked Google sign in button');
-                  setIsLoading(true);
-                  const result = await signIn('google', { 
-                    callbackUrl: '/dashboard',
-                    redirect: true 
-                  });
-                  console.log('🔐 Google sign in result:', result);
-                } catch (error) {
-                  console.error('❌ Error in Google sign in:', error);
-                  toast.error('שגיאה בהתחברות עם Google');
-                  setIsLoading(false);
-                }
-              }}
-              className="w-full max-w-xs flex items-center justify-center gap-2 px-6 py-3 border border-gray-300 rounded-xl hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isLoading}
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-              </svg>
-              <span className="font-medium text-gray-700">התחבר עם Google</span>
-            </button>
-          </div>
-
-          {/* Divider */}
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500 font-medium">
-                או המשך עם אימייל/טלפון
-              </span>
-            </div>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email or Phone */}
-            <div>
-              <label htmlFor="identifier" className="block text-sm font-medium text-gray-700 mb-2">
-                אימייל או טלפון
-              </label>
-              <div className="relative">
-                <Mail className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  id="identifier"
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  className="w-full pr-10 pl-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="your@email.com או 0501234567"
-                  required
-                  disabled={isLoading}
-                />
+          {step === 'phone' ? (
+            <>
+              {/* Header */}
+              <div className="text-center">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                  התחבר לחשבון שלך
+                </h2>
+                <p className="text-gray-600">
+                  הזן את מספר הטלפון שלך ונשלח לך קוד אימות בוואטסאפ
+                </p>
               </div>
-            </div>
 
-            {/* Password */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
-                סיסמה
-              </label>
-              <div className="relative">
-                <Lock className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full pr-10 pl-12 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="••••••••"
-                  required
+              {/* Phone Form */}
+              <form onSubmit={handleSendOtp} className="space-y-5">
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-2">
+                    מספר טלפון
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                    <input
+                      id="phone"
+                      type="tel"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full pr-10 pl-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-lg"
+                      placeholder="050-1234567"
+                      required
+                      disabled={isLoading}
+                      autoFocus
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={isLoading}
-                />
+                >
+                  {isLoading ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>שולח קוד...</span>
+                    </div>
+                  ) : (
+                    'שלח קוד אימות'
+                  )}
+                </button>
+              </form>
+            </>
+          ) : (
+            <>
+              {/* OTP Step */}
+              <div className="text-center">
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">
+                  הזן קוד אימות
+                </h2>
+                <p className="text-gray-600">
+                  שלחנו קוד בן 6 ספרות לוואטסאפ שלך
+                </p>
+                <p className="text-sm text-gray-500 mt-1">{normalizedPhone}</p>
+              </div>
+
+              {/* OTP Input */}
+              <div className="flex justify-center gap-3" dir="ltr">
+                {otp.map((digit, index) => (
+                  <input
+                    key={index}
+                    ref={(el) => { otpRefs.current[index] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpChange(index, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                    onPaste={index === 0 ? handleOtpPaste : undefined}
+                    className="w-12 h-14 text-center text-2xl font-bold border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all disabled:opacity-50"
+                    disabled={isLoading}
+                  />
+                ))}
+              </div>
+
+              {/* Resend / Back */}
+              <div className="flex items-center justify-between">
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  onClick={() => {
+                    setStep('phone');
+                    setOtp(['', '', '', '', '', '']);
+                  }}
+                  className="flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800"
                 >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  <ArrowRight className="w-4 h-4" />
+                  שינוי מספר
                 </button>
+
+                {countdown > 0 ? (
+                  <span className="text-sm text-gray-500">
+                    שליחה חוזרת בעוד {countdown} שניות
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSendOtp()}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    disabled={isLoading}
+                  >
+                    שלח קוד שוב
+                  </button>
+                )}
               </div>
-            </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={rememberMe}
-                  onChange={(e) => setRememberMe(e.target.checked)}
-                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 border-gray-300"
-                />
-                <span className="text-sm text-gray-700">זכור אותי</span>
-              </label>
-              
-              <Link
-                href="/auth/forgot-password"
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                שכחת סיסמה?
-              </Link>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>מתחבר...</span>
+              {isLoading && (
+                <div className="flex items-center justify-center gap-2 text-blue-600">
+                  <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                  <span>מאמת...</span>
                 </div>
-              ) : (
-                'התחבר'
               )}
-            </button>
-          </form>
+            </>
+          )}
 
           {/* Sign Up Link */}
           <div className="text-center pt-4">
@@ -287,14 +317,12 @@ export default function SignInPage() {
 
       {/* Left Side - Feature Display */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 to-blue-800 p-12 items-center justify-center relative overflow-hidden">
-        {/* Background Decorations */}
         <div className="absolute inset-0 opacity-10">
           <div className="absolute top-20 left-20 w-72 h-72 bg-white rounded-full blur-3xl"></div>
           <div className="absolute bottom-20 right-20 w-96 h-96 bg-white rounded-full blur-3xl"></div>
         </div>
 
         <div className="relative z-10 max-w-lg text-white space-y-8">
-          {/* Main Feature Card */}
           <div className="bg-white/10 backdrop-blur-lg rounded-3xl p-8 border border-white/20 shadow-2xl">
             <h2 className="text-4xl font-bold mb-4">
               התחבר לכל האפליקציות.
@@ -304,7 +332,6 @@ export default function SignInPage() {
             </p>
           </div>
 
-          {/* Feature Icons */}
           <div className="grid grid-cols-3 gap-6">
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 hover:bg-white/20 transition-all duration-300">
               <Calendar className="w-10 h-10 mb-3" />
@@ -320,7 +347,6 @@ export default function SignInPage() {
             </div>
           </div>
 
-          {/* Slider Dots */}
           <div className="flex justify-center gap-2 pt-4">
             <div className="w-3 h-3 rounded-full bg-white"></div>
             <div className="w-3 h-3 rounded-full bg-white/40"></div>
@@ -331,4 +357,3 @@ export default function SignInPage() {
     </div>
   );
 }
-

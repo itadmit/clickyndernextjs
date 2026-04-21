@@ -15,6 +15,7 @@ export default function SignInPage() {
   const [normalizedPhone, setNormalizedPhone] = useState('');
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [countdown, setCountdown] = useState(0);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -146,6 +147,7 @@ export default function SignInPage() {
       }
 
       toast.success('התחברת בהצלחה!');
+      setIsRedirecting(true);
       window.location.href = '/dashboard';
     } catch {
       toast.error('שגיאה באימות קוד');
@@ -154,19 +156,49 @@ export default function SignInPage() {
     }
   };
 
-  if (status === 'loading') {
+  if (status === 'loading' || isRedirecting || status === 'authenticated') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-          <p className="text-gray-600">טוען...</p>
+      <div className="min-h-screen bg-gray-50 flex" dir="rtl">
+        {/* Sidebar skeleton */}
+        <div className="hidden lg:block w-64 bg-white border-l border-gray-200 p-4 space-y-4">
+          <div className="h-9 bg-gray-200 rounded-lg animate-pulse mx-auto w-32" />
+          <div className="space-y-2 mt-8">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-3 px-3 py-2.5">
+                <div className="w-5 h-5 bg-gray-200 rounded animate-pulse" />
+                <div className="h-4 bg-gray-200 rounded animate-pulse" style={{ width: `${60 + Math.random() * 40}%` }} />
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Main content skeleton */}
+        <div className="flex-1 p-6 space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="h-7 w-48 bg-gray-200 rounded-lg animate-pulse" />
+              <div className="h-4 w-32 bg-gray-200 rounded-lg animate-pulse mt-2" />
+            </div>
+            <div className="h-10 w-28 bg-gray-200 rounded-xl animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-xl p-5 shadow-sm">
+                <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
+                <div className="h-8 w-16 bg-gray-200 rounded animate-pulse mt-3" />
+              </div>
+            ))}
+          </div>
+          <div className="bg-white rounded-xl p-6 shadow-sm">
+            <div className="h-5 w-32 bg-gray-200 rounded animate-pulse mb-4" />
+            <div className="space-y-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="h-12 bg-gray-100 rounded-lg animate-pulse" />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     );
-  }
-
-  if (status === 'authenticated') {
-    return null;
   }
 
   return (

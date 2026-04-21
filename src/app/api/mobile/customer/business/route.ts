@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
           },
         },
         businessHours: { orderBy: { weekday: 'asc' } },
+        galleryImages: { orderBy: { position: 'asc' } },
       },
     });
 
@@ -64,14 +65,25 @@ export async function GET(req: NextRequest) {
         description: business.description,
         address: business.address,
         phone: business.phone,
+        email: business.email,
         logoUrl: business.logoUrl,
+        coverImageUrl: business.coverImageUrl,
         primaryColor: business.primaryColor,
+        secondaryColor: business.secondaryColor,
+        font: business.font,
         showBranches: business.showBranches,
         showStaff: business.showStaff,
+        facebookUrl: business.facebookUrl,
+        instagramUrl: business.instagramUrl,
+        twitterUrl: business.twitterUrl,
+        youtubeUrl: business.youtubeUrl,
+        whatsappNumber: business.whatsappNumber,
+        telegramUrl: business.telegramUrl,
         branches: business.branches,
         services: business.services,
         staff: business.staff,
         businessHours: business.businessHours,
+        galleryImages: business.galleryImages,
       },
     });
   } catch (error) {

@@ -1,10 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Business } from '@prisma/client';
-import { Save, Upload, Palette, Layout, Sparkles, Square, Menu, Type } from 'lucide-react';
+import { Save, Upload, Palette, Layout, Sparkles, Square, Menu, Type, Image as ImageIcon, X, Plus, Share2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useRouter } from 'next/navigation';
+
+interface GalleryImage {
+  id: string;
+  imageUrl: string;
+  caption: string | null;
+  position: number;
+}
 
 interface BookingPageDesignProps {
   business: Business;
@@ -46,8 +53,12 @@ export function BookingPageDesign({ business }: BookingPageDesignProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
+  const [isUploadingGallery, setIsUploadingGallery] = useState(false);
+  const [galleryImages, setGalleryImages] = useState<GalleryImage[]>([]);
   const [formData, setFormData] = useState({
     logoUrl: business.logoUrl || '',
+    coverImageUrl: business.coverImageUrl || '',
     templateStyle: business.templateStyle || 'modern',
     primaryColor: business.primaryColor || '#3b82f6',
     secondaryColor: business.secondaryColor || '#758dff',
@@ -60,7 +71,25 @@ export function BookingPageDesign({ business }: BookingPageDesignProps) {
     developerMode: business.developerMode || false,
     customCss: business.customCss || '',
     customJs: business.customJs || '',
+    facebookUrl: business.facebookUrl || '',
+    instagramUrl: business.instagramUrl || '',
+    twitterUrl: business.twitterUrl || '',
+    youtubeUrl: business.youtubeUrl || '',
+    whatsappNumber: business.whatsappNumber || '',
+    telegramUrl: business.telegramUrl || '',
   });
+
+  const fetchGallery = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/businesses/${business.id}/gallery`);
+      if (res.ok) {
+        const data = await res.json();
+        setGalleryImages(data.images || []);
+      }
+    } catch { /* ignore */ }
+  }, [business.id]);
+
+  useEffect(() => { fetchGallery(); }, [fetchGallery]);
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -97,6 +126,63 @@ export function BookingPageDesign({ business }: BookingPageDesignProps) {
     } finally {
       setIsUploadingLogo(false);
     }
+  };
+
+  const handleCoverUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('נא להעלות קובץ תמונה בלבד'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error('גודל הקובץ חייב להיות פחות מ-10MB'); return; }
+    setIsUploadingCover(true);
+    try {
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      uploadData.append('folder', `covers/${business.id}`);
+      const res = await fetch('/api/upload', { method: 'POST', body: uploadData });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Upload failed'); }
+      const { url } = await res.json();
+      setFormData((prev) => ({ ...prev, coverImageUrl: url }));
+      toast.success('תמונת הקאבר הועלתה! זכור לשמור את השינויים');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'שגיאה בהעלאת תמונת קאבר');
+    } finally { setIsUploadingCover(false); }
+  };
+
+  const handleGalleryUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('נא להעלות קובץ תמונה בלבד'); return; }
+    if (file.size > 10 * 1024 * 1024) { toast.error('גודל הקובץ חייב להיות פחות מ-10MB'); return; }
+    setIsUploadingGallery(true);
+    try {
+      const uploadData = new FormData();
+      uploadData.append('file', file);
+      uploadData.append('folder', `gallery/${business.id}`);
+      const res = await fetch('/api/upload', { method: 'POST', body: uploadData });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Upload failed'); }
+      const { url } = await res.json();
+      const galleryRes = await fetch(`/api/businesses/${business.id}/gallery`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageUrl: url }),
+      });
+      if (!galleryRes.ok) throw new Error('Failed to save gallery image');
+      toast.success('התמונה נוספה לגלריה');
+      fetchGallery();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'שגיאה בהוספת תמונה');
+    } finally { setIsUploadingGallery(false); }
+  };
+
+  const handleDeleteGalleryImage = async (imageId: string) => {
+    try {
+      const res = await fetch(`/api/businesses/${business.id}/gallery`, {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageId }),
+      });
+      if (!res.ok) throw new Error('Failed to delete');
+      setGalleryImages((prev) => prev.filter((img) => img.id !== imageId));
+      toast.success('התמונה נמחקה');
+    } catch { toast.error('שגיאה במחיקת התמונה'); }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -195,6 +281,108 @@ export function BookingPageDesign({ business }: BookingPageDesignProps) {
             rows={4}
             placeholder="ספר קצת על העסק שלך... התיאור יוצג בעמוד קביעת התורים"
           />
+        </div>
+      </div>
+
+      {/* Cover Image Section */}
+      <div className="card">
+        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+          <ImageIcon className="w-5 h-5 text-primary-600" />
+          תמונת קאבר
+        </h3>
+        <p className="text-sm text-gray-500 mb-4">תמונת רקע ראשית שמוצגת בראש דף העסק באפליקציה. מומלץ: 1200x400 פיקסלים</p>
+        {formData.coverImageUrl ? (
+          <div className="relative rounded-lg overflow-hidden mb-3">
+            <img src={formData.coverImageUrl} alt="Cover" className="w-full h-48 object-cover" />
+            <button
+              type="button"
+              onClick={() => setFormData((prev) => ({ ...prev, coverImageUrl: '' }))}
+              className="absolute top-2 left-2 bg-red-600 text-white rounded-full p-1.5 hover:bg-red-700 shadow-lg"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center bg-gray-50">
+            <ImageIcon className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+            <p className="text-sm text-gray-500">אין תמונת קאבר</p>
+          </div>
+        )}
+        <label htmlFor="cover-upload" className="btn btn-secondary inline-flex items-center gap-2 cursor-pointer mt-3">
+          <Upload className="w-4 h-4" />
+          {isUploadingCover ? 'מעלה...' : 'העלה תמונת קאבר'}
+        </label>
+        <input id="cover-upload" type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" disabled={isUploadingCover} />
+      </div>
+
+      {/* Gallery Management Section */}
+      <div className="card">
+        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+          <ImageIcon className="w-5 h-5 text-primary-600" />
+          גלריית תמונות
+        </h3>
+        <p className="text-sm text-gray-500 mb-4">תמונות שמוצגות בדף העסק באפליקציה (עד 20 תמונות)</p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+          {galleryImages.map((img) => (
+            <div key={img.id} className="relative group rounded-lg overflow-hidden border border-gray-200">
+              <img src={img.imageUrl} alt={img.caption || 'Gallery'} className="w-full h-32 object-cover" />
+              <button
+                type="button"
+                onClick={() => handleDeleteGalleryImage(img.id)}
+                className="absolute top-1 left-1 bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+          {galleryImages.length < 20 && (
+            <label htmlFor="gallery-upload" className="border-2 border-dashed border-gray-300 rounded-lg h-32 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors">
+              {isUploadingGallery ? (
+                <div className="w-6 h-6 border-2 border-primary-600 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Plus className="w-6 h-6 text-gray-400 mb-1" />
+                  <span className="text-xs text-gray-500">הוסף תמונה</span>
+                </>
+              )}
+            </label>
+          )}
+        </div>
+        <input id="gallery-upload" type="file" accept="image/*" onChange={handleGalleryUpload} className="hidden" disabled={isUploadingGallery} />
+      </div>
+
+      {/* Social Links Section */}
+      <div className="card">
+        <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+          <Share2 className="w-5 h-5 text-primary-600" />
+          רשתות חברתיות
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="form-label">Facebook</label>
+            <input type="url" value={formData.facebookUrl} onChange={(e) => setFormData((prev) => ({ ...prev, facebookUrl: e.target.value }))} className="form-input" placeholder="https://facebook.com/..." dir="ltr" />
+          </div>
+          <div>
+            <label className="form-label">Instagram</label>
+            <input type="url" value={formData.instagramUrl} onChange={(e) => setFormData((prev) => ({ ...prev, instagramUrl: e.target.value }))} className="form-input" placeholder="https://instagram.com/..." dir="ltr" />
+          </div>
+          <div>
+            <label className="form-label">YouTube</label>
+            <input type="url" value={formData.youtubeUrl} onChange={(e) => setFormData((prev) => ({ ...prev, youtubeUrl: e.target.value }))} className="form-input" placeholder="https://youtube.com/..." dir="ltr" />
+          </div>
+          <div>
+            <label className="form-label">Twitter / X</label>
+            <input type="url" value={formData.twitterUrl} onChange={(e) => setFormData((prev) => ({ ...prev, twitterUrl: e.target.value }))} className="form-input" placeholder="https://x.com/..." dir="ltr" />
+          </div>
+          <div>
+            <label className="form-label">WhatsApp</label>
+            <input type="tel" value={formData.whatsappNumber} onChange={(e) => setFormData((prev) => ({ ...prev, whatsappNumber: e.target.value }))} className="form-input" placeholder="972541234567" dir="ltr" />
+            <p className="text-xs text-gray-500 mt-1">מספר בפורמט בינלאומי ללא +</p>
+          </div>
+          <div>
+            <label className="form-label">Telegram</label>
+            <input type="url" value={formData.telegramUrl} onChange={(e) => setFormData((prev) => ({ ...prev, telegramUrl: e.target.value }))} className="form-input" placeholder="https://t.me/..." dir="ltr" />
+          </div>
         </div>
       </div>
 

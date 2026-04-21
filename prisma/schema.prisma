@@ -100,6 +100,7 @@ model Business {
 
   // מיתוג
   logoUrl              String? @map("logo_url")
+  coverImageUrl        String? @map("cover_image_url")
   templateStyle        String  @default("modern") @map("template_style") // modern, classic, minimal
   primaryColor         String? @default("#3b82f6") @map("primary_color")
   secondaryColor       String? @default("#758dff") @map("secondary_color")
@@ -181,10 +182,25 @@ model Business {
   recurringSeries        RecurringSeries[]
   coupons                Coupon[]
   resources              Resource[]
+  galleryImages          BusinessGalleryImage[]
 
   @@index([slug])
   @@index([ownerUserId])
   @@map("businesses")
+}
+
+model BusinessGalleryImage {
+  id         String   @id @default(cuid())
+  businessId String   @map("business_id")
+  imageUrl   String   @map("image_url")
+  caption    String?
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+
+  @@index([businessId])
+  @@map("business_gallery_images")
 }
 
 model BusinessMember {

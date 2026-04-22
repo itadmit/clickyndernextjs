@@ -85,6 +85,13 @@ export async function GET(req: NextRequest) {
         businessHours: business.businessHours,
         galleryImages: business.galleryImages,
       },
+      customer: {
+        id: customer.id,
+        firstName: customer.firstName,
+        lastName: customer.lastName,
+        phone: customer.phone,
+        email: customer.email,
+      },
     });
   } catch (error) {
     console.error('Get business details error:', error);

@@ -33,18 +33,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ext = file.name.split('.').pop() || 'bin';
+    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+      console.error('Upload error: BLOB_READ_WRITE_TOKEN is not configured');
+      return NextResponse.json(
+        { error: 'Storage is not configured (BLOB_READ_WRITE_TOKEN missing)' },
+        { status: 500 }
+      );
+    }
+
+    const ext = (file.name?.split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '');
     const filename = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
     const blob = await put(filename, file, {
       access: 'public',
       addRandomSuffix: false,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
     });
 
     return NextResponse.json({ url: blob.url });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Upload error:', error);
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+    const message =
+      error?.message ||
+      (typeof error === 'string' ? error : 'Upload failed');
+    return NextResponse.json({ error: `Upload failed: ${message}` }, { status: 500 });
   }
 }
 

@@ -183,6 +183,8 @@ model Business {
   coupons                Coupon[]
   resources              Resource[]
   galleryImages          BusinessGalleryImage[]
+  servicePackages        ServicePackage[]
+  customerPackages       CustomerPackage[]
 
   @@index([slug])
   @@index([ownerUserId])
@@ -409,6 +411,7 @@ model Service {
   intakeForms      ServiceIntakeForm[]
   groupSessions    GroupSession[]
   waitlistEntries  WaitlistEntry[]
+  servicePackages  ServicePackage[]
 
   @@index([businessId, active, categoryId])
   @@map("services")
@@ -723,6 +726,7 @@ model Customer {
   notifications          Notification[]
   dashboardNotifications DashboardNotification[]
   waitlistEntries        WaitlistEntry[]
+  customerPackages       CustomerPackage[]
 
   @@index([businessId, phone])
   @@index([businessId, email])
@@ -739,6 +743,7 @@ model Appointment {
   customerId        String            @map("customer_id")
   groupSessionId    String?           @map("group_session_id")
   recurringSeriesId String?           @map("recurring_series_id")
+  customerPackageId String?           @map("customer_package_id")
   startAt           DateTime          @map("start_at")
   endAt             DateTime          @map("end_at")
   status            AppointmentStatus @default(confirmed)
@@ -762,6 +767,7 @@ model Appointment {
   customer               Customer                  @relation(fields: [customerId], references: [id], onDelete: Cascade)
   groupSession           GroupSession?              @relation(fields: [groupSessionId], references: [id], onDelete: SetNull)
   recurringSeries        RecurringSeries?           @relation(fields: [recurringSeriesId], references: [id], onDelete: SetNull)
+  customerPackage        CustomerPackage?           @relation(fields: [customerPackageId], references: [id], onDelete: SetNull)
   appointmentAudit       AppointmentAudit[]
   pendingEdits           PendingAppointmentEdit[]
   confirmations          AppointmentConfirmation[]
@@ -1324,4 +1330,60 @@ model CustomerNotification {
   @@index([userId, acknowledged])
   @@index([businessId])
   @@map("customer_notifications")
+}
+
+// ============================================
+// Service Packages (חבילות תורים)
+// ============================================
+
+model ServicePackage {
+  id            String   @id @default(cuid())
+  businessId    String   @map("business_id")
+  serviceId     String?  @map("service_id") // null = applies to any service in this business
+  name          String
+  description   String?
+  totalSessions Int      @map("total_sessions")
+  priceCents    Int      @map("price_cents")
+  validityDays  Int?     @map("validity_days") // null = no expiry
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  business         Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  service          Service?          @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  customerPackages CustomerPackage[]
+
+  @@index([businessId, active])
+  @@map("service_packages")
+}
+
+model CustomerPackage {
+  id                   String                @id @default(cuid())
+  businessId           String                @map("business_id")
+  customerId           String                @map("customer_id")
+  packageId            String                @map("package_id")
+  sessionsRemaining    Int                   @map("sessions_remaining")
+  totalSessions        Int                   @map("total_sessions")
+  priceCents           Int                   @map("price_cents")
+  status               CustomerPackageStatus @default(active)
+  expiresAt            DateTime?             @map("expires_at")
+  purchasedAt          DateTime              @default(now()) @map("purchased_at")
+  paymentTransactionId String?               @map("payment_transaction_id")
+  notes                String?
+
+  business     Business       @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer     Customer       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  package      ServicePackage @relation(fields: [packageId], references: [id], onDelete: Restrict)
+  appointments Appointment[]
+
+  @@index([businessId, customerId, status])
+  @@index([businessId, status, expiresAt])
+  @@map("customer_packages")
+}
+
+enum CustomerPackageStatus {
+  active
+  used
+  expired
+  canceled
 }

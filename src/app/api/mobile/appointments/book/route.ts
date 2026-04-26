@@ -32,6 +32,7 @@ export async function POST(req: NextRequest) {
       time,
       customerId,
       customer: customerInput,
+      customerPackageId,
       source = 'admin',
     } = body;
 
@@ -167,6 +168,32 @@ export async function POST(req: NextRequest) {
     const confirmationCode = generateConfirmationCode();
     const customerName = customer.firstName + ' ' + customer.lastName;
 
+    // Validate customer package (if redeeming a session). Must belong to this customer,
+    // be active, have remaining sessions, not expired, and (if scoped) match the service.
+    let validatedCustomerPackage = null as null | { id: string };
+    if (customerPackageId) {
+      const cp = await prisma.customerPackage.findFirst({
+        where: { id: customerPackageId, businessId: business.id, customerId: customer.id },
+        include: { package: true },
+      });
+      if (!cp) {
+        return NextResponse.json({ error: 'Customer package not found' }, { status: 404 });
+      }
+      if (cp.status !== 'active') {
+        return NextResponse.json({ error: 'Customer package is not active' }, { status: 400 });
+      }
+      if (cp.sessionsRemaining <= 0) {
+        return NextResponse.json({ error: 'No sessions remaining on this package' }, { status: 400 });
+      }
+      if (cp.expiresAt && cp.expiresAt < new Date()) {
+        return NextResponse.json({ error: 'Package expired' }, { status: 400 });
+      }
+      if (cp.package.serviceId && cp.package.serviceId !== serviceId) {
+        return NextResponse.json({ error: 'Package does not cover this service' }, { status: 400 });
+      }
+      validatedCustomerPackage = { id: cp.id };
+    }
+
     const appointment = await prisma.appointment.create({
       data: {
         businessId: business.id,
@@ -174,15 +201,32 @@ export async function POST(req: NextRequest) {
         serviceId,
         staffId: staffId || null,
         customerId: customer.id,
+        customerPackageId: validatedCustomerPackage?.id ?? null,
         startAt,
         endAt,
         status: 'confirmed',
         priceCents: service.priceCents,
-        paymentStatus: 'not_required',
+        paymentStatus: validatedCustomerPackage ? 'paid' : 'not_required',
         confirmationCode,
         source,
       },
     });
+
+    // Decrement the package after the appointment exists. If this drops to zero,
+    // mark the customer package as fully used.
+    if (validatedCustomerPackage) {
+      const updated = await prisma.customerPackage.update({
+        where: { id: validatedCustomerPackage.id },
+        data: { sessionsRemaining: { decrement: 1 } },
+        select: { sessionsRemaining: true },
+      });
+      if (updated.sessionsRemaining <= 0) {
+        await prisma.customerPackage.update({
+          where: { id: validatedCustomerPackage.id },
+          data: { status: 'used' },
+        });
+      }
+    }
 
     await prisma.usageCounter.upsert({
       where: {

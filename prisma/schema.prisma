@@ -186,6 +186,7 @@ model Business {
   servicePackages        ServicePackage[]
   customerPackages       CustomerPackage[]
   giftCards              GiftCard[]
+  reviews                Review[]
 
   @@index([slug])
   @@index([ownerUserId])
@@ -728,6 +729,7 @@ model Customer {
   dashboardNotifications DashboardNotification[]
   waitlistEntries        WaitlistEntry[]
   customerPackages       CustomerPackage[]
+  reviews                Review[]
 
   @@index([businessId, phone])
   @@index([businessId, email])
@@ -769,6 +771,7 @@ model Appointment {
   groupSession           GroupSession?              @relation(fields: [groupSessionId], references: [id], onDelete: SetNull)
   recurringSeries        RecurringSeries?           @relation(fields: [recurringSeriesId], references: [id], onDelete: SetNull)
   customerPackage        CustomerPackage?           @relation(fields: [customerPackageId], references: [id], onDelete: SetNull)
+  review                 Review?
   appointmentAudit       AppointmentAudit[]
   pendingEdits           PendingAppointmentEdit[]
   confirmations          AppointmentConfirmation[]
@@ -1438,4 +1441,38 @@ enum GiftCardStatus {
   redeemed
   canceled
   expired
+}
+
+// ============================================
+// Reviews (דירוגים וחוות דעת)
+// ============================================
+
+model Review {
+  id             String       @id @default(cuid())
+  businessId     String       @map("business_id")
+  appointmentId  String       @unique @map("appointment_id")
+  customerId     String       @map("customer_id")
+  token          String       @unique
+  rating         Int?
+  comment        String?
+  submittedAt    DateTime?    @map("submitted_at")
+  status         ReviewStatus @default(pending)
+  publicResponse String?      @map("public_response")
+  responseAt     DateTime?    @map("response_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  business    Business    @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  customer    Customer    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, status, submittedAt])
+  @@index([token])
+  @@map("reviews")
+}
+
+enum ReviewStatus {
+  pending
+  published
+  hidden
 }

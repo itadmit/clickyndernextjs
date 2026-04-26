@@ -1,0 +1,68 @@
+/**
+ * Mobile Review detail API (admin)
+ * GET /api/mobile/reviews/[id] - View
+ * PUT /api/mobile/reviews/[id] - Update status (publish/hide) and/or publicResponse
+ * DELETE /api/mobile/reviews/[id] - Delete (rare; usually hide instead)
+ */
+
+import { NextRequest, NextResponse } from 'next/server';
+import { authenticateRequest, getAuthenticatedBusiness } from '@/lib/mobile-auth';
+import { prisma } from '@/lib/prisma';
+
+async function authBusiness(req: NextRequest) {
+  const auth = await authenticateRequest(req);
+  if (!auth.authenticated) return { error: auth.error, status: 401 } as const;
+  const business = await getAuthenticatedBusiness(auth.userId!);
+  if (!business) return { error: 'Business not found', status: 404 } as const;
+  return { business } as const;
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const a = await authBusiness(req);
+  if ('error' in a) return NextResponse.json({ error: a.error }, { status: a.status });
+
+  const { id } = await params;
+  const r = await prisma.review.findFirst({
+    where: { id, businessId: a.business.id },
+    include: {
+      customer: true,
+      appointment: { include: { service: true, staff: true } },
+    },
+  });
+  if (!r) return NextResponse.json({ error: 'Review not found' }, { status: 404 });
+  return NextResponse.json({ review: r });
+}
+
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const a = await authBusiness(req);
+  if ('error' in a) return NextResponse.json({ error: a.error }, { status: a.status });
+
+  const { id } = await params;
+  const existing = await prisma.review.findFirst({ where: { id, businessId: a.business.id } });
+  if (!existing) return NextResponse.json({ error: 'Review not found' }, { status: 404 });
+
+  const body = await req.json();
+  const data: any = {};
+  if ('status' in body && ['pending', 'published', 'hidden'].includes(body.status)) {
+    data.status = body.status;
+  }
+  if ('publicResponse' in body) {
+    data.publicResponse = body.publicResponse || null;
+    data.responseAt = body.publicResponse ? new Date() : null;
+  }
+
+  const r = await prisma.review.update({ where: { id }, data });
+  return NextResponse.json({ review: r });
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const a = await authBusiness(req);
+  if ('error' in a) return NextResponse.json({ error: a.error }, { status: a.status });
+
+  const { id } = await params;
+  const existing = await prisma.review.findFirst({ where: { id, businessId: a.business.id } });
+  if (!existing) return NextResponse.json({ error: 'Review not found' }, { status: 404 });
+
+  await prisma.review.delete({ where: { id } });
+  return NextResponse.json({ deleted: true });
+}

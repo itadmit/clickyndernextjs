@@ -187,6 +187,8 @@ model Business {
   customerPackages       CustomerPackage[]
   giftCards              GiftCard[]
   reviews                Review[]
+  loyaltyProgram         LoyaltyProgram?
+  loyaltyMembers         LoyaltyMember[]
 
   @@index([slug])
   @@index([ownerUserId])
@@ -732,6 +734,7 @@ model Customer {
   waitlistEntries        WaitlistEntry[]
   customerPackages       CustomerPackage[]
   reviews                Review[]
+  loyaltyMember          LoyaltyMember?
 
   @@index([businessId, phone])
   @@index([businessId, email])
@@ -1478,4 +1481,70 @@ enum ReviewStatus {
   pending
   published
   hidden
+}
+
+// ============================================
+// Loyalty (מועדון לקוחות)
+// ============================================
+
+model LoyaltyProgram {
+  id                  String   @id @default(cuid())
+  businessId          String   @unique @map("business_id")
+  enabled             Boolean  @default(false)
+  name                String   @default("מועדון לקוחות")
+  spendPerPointCents  Int      @default(1000) @map("spend_per_point_cents") // 1 נקודה ל-X אג'
+  pointsPerRedemption Int      @default(100) @map("points_per_redemption")  // X נקודות תמורת...
+  redemptionValueCents Int     @default(1000) @map("redemption_value_cents")// ...Y אג' הנחה
+  welcomeBonusPoints  Int      @default(0) @map("welcome_bonus_points")
+  expiryMonths        Int?     @map("expiry_months")
+  termsHe             String?  @map("terms_he")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  business Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  members  LoyaltyMember[]
+
+  @@map("loyalty_programs")
+}
+
+model LoyaltyMember {
+  id              String   @id @default(cuid())
+  programId       String   @map("program_id")
+  businessId      String   @map("business_id")
+  customerId      String   @unique @map("customer_id")
+  points          Int      @default(0)
+  totalEarned     Int      @default(0) @map("total_earned")
+  joinedAt        DateTime @default(now()) @map("joined_at")
+  lastActivityAt  DateTime @default(now()) @map("last_activity_at")
+
+  program      LoyaltyProgram        @relation(fields: [programId], references: [id], onDelete: Cascade)
+  business     Business              @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  customer     Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  transactions LoyaltyTransaction[]
+
+  @@index([businessId, points])
+  @@map("loyalty_members")
+}
+
+model LoyaltyTransaction {
+  id            String                  @id @default(cuid())
+  memberId      String                  @map("member_id")
+  type          LoyaltyTransactionType
+  points        Int                     // positive = earn, negative = redeem/expire/adjust
+  appointmentId String?                 @map("appointment_id")
+  notes         String?
+  createdAt     DateTime                @default(now()) @map("created_at")
+
+  member LoyaltyMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@index([memberId, createdAt])
+  @@map("loyalty_transactions")
+}
+
+enum LoyaltyTransactionType {
+  earn
+  redeem
+  adjust
+  expire
+  welcome
 }

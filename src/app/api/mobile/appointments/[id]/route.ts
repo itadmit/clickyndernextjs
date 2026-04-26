@@ -181,6 +181,69 @@ export async function PUT(
           read: true,
         },
       });
+
+      // Loyalty auto-earn: if a program is enabled, award points based on the
+      // appointment price. Idempotent — we don't double-award if the same
+      // appointment is re-marked as completed.
+      try {
+        const program = await prisma.loyaltyProgram.findUnique({
+          where: { businessId: business.id },
+        });
+        const priceCents = updatedAppointment.priceCents ?? updatedAppointment.service.priceCents ?? 0;
+        if (program && program.enabled && priceCents > 0 && program.spendPerPointCents > 0) {
+          const pointsToEarn = Math.floor(priceCents / program.spendPerPointCents);
+          if (pointsToEarn > 0) {
+            // Find or create member
+            let member = await prisma.loyaltyMember.findUnique({
+              where: { customerId: updatedAppointment.customerId },
+            });
+            if (!member) {
+              member = await prisma.loyaltyMember.create({
+                data: {
+                  programId: program.id,
+                  businessId: business.id,
+                  customerId: updatedAppointment.customerId,
+                  points: program.welcomeBonusPoints,
+                  totalEarned: program.welcomeBonusPoints,
+                },
+              });
+              if (program.welcomeBonusPoints > 0) {
+                await prisma.loyaltyTransaction.create({
+                  data: { memberId: member.id, type: 'welcome', points: program.welcomeBonusPoints, notes: 'בונוס הצטרפות' },
+                });
+              }
+            }
+            // Avoid double-awarding for the same appointment
+            const existingEarn = await prisma.loyaltyTransaction.findFirst({
+              where: { memberId: member.id, appointmentId: updatedAppointment.id, type: 'earn' },
+            });
+            if (!existingEarn) {
+              await prisma.$transaction([
+                prisma.loyaltyTransaction.create({
+                  data: {
+                    memberId: member.id,
+                    type: 'earn',
+                    points: pointsToEarn,
+                    appointmentId: updatedAppointment.id,
+                    notes: `${updatedAppointment.service.name}`,
+                  },
+                }),
+                prisma.loyaltyMember.update({
+                  where: { id: member.id },
+                  data: {
+                    points: member.points + pointsToEarn,
+                    totalEarned: member.totalEarned + pointsToEarn,
+                    lastActivityAt: new Date(),
+                  },
+                }),
+              ]);
+            }
+          }
+        }
+      } catch (loyaltyErr) {
+        // never fail the appointment-update because of loyalty
+        console.error('Loyalty auto-earn failed:', loyaltyErr);
+      }
     }
 
     return NextResponse.json({ success: true });

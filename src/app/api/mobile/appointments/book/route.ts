@@ -209,6 +209,7 @@ export async function POST(req: NextRequest) {
         paymentStatus: validatedCustomerPackage ? 'paid' : 'not_required',
         confirmationCode,
         source,
+        virtualMeetingUrl: service.isVirtual ? service.virtualMeetingUrl : null,
       },
     });
 

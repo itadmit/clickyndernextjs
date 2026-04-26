@@ -50,6 +50,8 @@ export async function GET(req: NextRequest) {
         waitlistEnabled: s.waitlistEnabled,
         requirePayment: s.requirePayment,
         depositOverrideCents: s.depositOverrideCents,
+        isVirtual: s.isVirtual,
+        virtualMeetingUrl: s.virtualMeetingUrl,
       })),
     });
   } catch (error) {
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest) {
       name, durationMin, priceCents, bufferAfterMin, description, color, active,
       staffIds, categoryId, isGroup, maxParticipants, minParticipants,
       waitlistEnabled, requirePayment, depositOverrideCents,
+      isVirtual, virtualMeetingUrl,
     } = body;
 
     if (!name || durationMin == null) {
@@ -97,6 +100,8 @@ export async function POST(req: NextRequest) {
         waitlistEnabled: waitlistEnabled ?? false,
         requirePayment: requirePayment ?? false,
         depositOverrideCents: depositOverrideCents ?? null,
+        isVirtual: isVirtual ?? false,
+        virtualMeetingUrl: virtualMeetingUrl ?? null,
       },
     });
 

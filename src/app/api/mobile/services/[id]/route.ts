@@ -81,6 +81,7 @@ export async function PUT(
       name, durationMin, priceCents, bufferAfterMin, description, color, active,
       staffIds, categoryId, isGroup, maxParticipants, minParticipants,
       waitlistEnabled, requirePayment, depositOverrideCents,
+      isVirtual, virtualMeetingUrl,
     } = body;
 
     const service = await prisma.service.update({
@@ -100,6 +101,8 @@ export async function PUT(
         ...(waitlistEnabled !== undefined && { waitlistEnabled }),
         ...(requirePayment !== undefined && { requirePayment }),
         ...(depositOverrideCents !== undefined && { depositOverrideCents }),
+        ...(isVirtual !== undefined && { isVirtual }),
+        ...(virtualMeetingUrl !== undefined && { virtualMeetingUrl }),
       },
     });
 

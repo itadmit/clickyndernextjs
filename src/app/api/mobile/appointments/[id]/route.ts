@@ -60,6 +60,7 @@ export async function GET(
       source: appointment.source,
       createdAt: appointment.createdAt,
       canceledAt: appointment.canceledAt,
+      virtualMeetingUrl: appointment.virtualMeetingUrl,
       customer: {
         id: appointment.customer.id,
         firstName: appointment.customer.firstName,
@@ -75,6 +76,7 @@ export async function GET(
         priceCents: appointment.service.priceCents,
         color: appointment.service.color,
         description: appointment.service.description,
+        isVirtual: appointment.service.isVirtual,
       },
       staff: appointment.staff
         ? {

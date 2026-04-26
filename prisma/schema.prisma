@@ -185,6 +185,7 @@ model Business {
   galleryImages          BusinessGalleryImage[]
   servicePackages        ServicePackage[]
   customerPackages       CustomerPackage[]
+  giftCards              GiftCard[]
 
   @@index([slug])
   @@index([ownerUserId])
@@ -1386,4 +1387,55 @@ enum CustomerPackageStatus {
   used
   expired
   canceled
+}
+
+// ============================================
+// Gift Cards (תווי שי)
+// ============================================
+
+model GiftCard {
+  id                String          @id @default(cuid())
+  businessId        String          @map("business_id")
+  code              String          @unique
+  initialCents      Int             @map("initial_cents")
+  balanceCents      Int             @map("balance_cents")
+  status            GiftCardStatus  @default(active)
+  recipientName     String?         @map("recipient_name")
+  recipientPhone    String?         @map("recipient_phone")
+  recipientEmail    String?         @map("recipient_email")
+  message           String?
+  expiresAt         DateTime?       @map("expires_at")
+  purchasedAt       DateTime        @default(now()) @map("purchased_at")
+  redeemedAt        DateTime?       @map("redeemed_at")
+  createdByUserId   String?         @map("created_by_user_id")
+  notes             String?
+
+  business    Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  redemptions GiftCardRedemption[]
+
+  @@index([businessId, status])
+  @@index([code])
+  @@map("gift_cards")
+}
+
+model GiftCardRedemption {
+  id            String   @id @default(cuid())
+  giftCardId    String   @map("gift_card_id")
+  amountCents   Int      @map("amount_cents")
+  appointmentId String?  @map("appointment_id")
+  redeemedAt    DateTime @default(now()) @map("redeemed_at")
+  notes         String?
+
+  giftCard GiftCard @relation(fields: [giftCardId], references: [id], onDelete: Cascade)
+
+  @@index([giftCardId])
+  @@index([appointmentId])
+  @@map("gift_card_redemptions")
+}
+
+enum GiftCardStatus {
+  active
+  redeemed
+  canceled
+  expired
 }

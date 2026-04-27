@@ -318,14 +318,15 @@ export async function sendBookingConfirmation(appointmentId: string): Promise<bo
       return false;
     }
 
+    const tz = appointment.business.timezone || 'Asia/Jerusalem';
     const variables: TemplateVariables = {
       customer_name: `${appointment.customer.firstName} ${appointment.customer.lastName}`,
       business_name: appointment.business.name,
       service_name: appointment.service.name,
-      staff_name: appointment.staff?.name,
-      branch_name: appointment.branch?.name,
-      appointment_date: appointment.startAt.toLocaleDateString('he-IL'),
-      appointment_time: appointment.startAt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' }),
+      staff_name: appointment.staff?.name || '',
+      branch_name: appointment.branch?.name || '',
+      appointment_date: appointment.startAt.toLocaleDateString('he-IL', { timeZone: tz }),
+      appointment_time: appointment.startAt.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit', timeZone: tz }),
       confirmation_code: appointment.confirmationCode,
     };
 
@@ -390,6 +391,15 @@ export async function sendBookingConfirmation(appointmentId: string): Promise<bo
  */
 function replaceTemplateVariables(template: string, variables: TemplateVariables): string {
   let result = template;
+
+  // Pass 1: drop entire lines whose only meaningful payload is an empty optional
+  // placeholder (e.g. "👤 מטפל/ת: {staff_name}" when no staff is assigned).
+  for (const [key, value] of Object.entries(variables)) {
+    if (value === '' || value === null) {
+      const lineRe = new RegExp(`(?:^|\\n)[^\\n]*\\{\\s*${key}\\s*\\}[^\\n]*`, 'g');
+      result = result.replace(lineRe, '');
+    }
+  }
 
   for (const [key, value] of Object.entries(variables)) {
     if (value !== undefined) {

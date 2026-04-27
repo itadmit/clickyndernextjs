@@ -1,14 +1,18 @@
 /**
  * Mobile: cancel the active subscription.
  * POST /api/mobile/subscriptions/cancel
- *   Marks the subscription as 'canceled'. The recurring charges stop at the
- *   end of the current billing period. We don't yet call the PayPlus
- *   recurring-cancel API here — manual ops can confirm. (TODO)
+ *   1. Calls PayPlus RecurringPayments/Cancel to stop the standing order
+ *      (if a payplusRecurringUid is stored on the row).
+ *   2. Marks the subscription as 'canceled' so the UI reflects it.
+ *
+ * If the PayPlus call fails we still mark the subscription canceled, but
+ * include the failure message in the response so ops can follow up.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { authenticateRequest, getAuthenticatedBusiness } from '@/lib/mobile-auth';
 import { prisma } from '@/lib/prisma';
+import { cancelRecurringPayment } from '@/lib/payplus-service';
 
 export async function POST(req: NextRequest) {
   const auth = await authenticateRequest(req);
@@ -22,10 +26,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Already canceled' }, { status: 400 });
   }
 
+  let payplusError: string | null = null;
+  if (sub.payplusRecurringUid) {
+    try {
+      const r = await cancelRecurringPayment(sub.payplusRecurringUid);
+      if (r.results?.status !== 'success') {
+        payplusError = r.results?.description || 'PayPlus did not confirm cancel';
+      }
+    } catch (e) {
+      payplusError = (e as Error).message;
+      console.error('PayPlus recurring cancel failed:', e);
+    }
+  }
+
   const updated = await prisma.subscription.update({
     where: { id: sub.id },
     data: { status: 'canceled' },
   });
 
-  return NextResponse.json({ subscription: updated });
+  return NextResponse.json({
+    subscription: updated,
+    payplus: payplusError ? { canceled: false, error: payplusError } : { canceled: true },
+  });
 }

@@ -135,3 +135,27 @@ export async function createRecurringPayment(params: CreateRecurringParams): Pro
 
   return res.json();
 }
+
+interface PayPlusCancelRecurringResponse {
+  results: { status: string; code?: number; description?: string };
+  data?: any;
+}
+
+/**
+ * Cancel a PayPlus recurring payment (stop the standing order).
+ * Endpoint: POST /api/v1.0/RecurringPayments/Cancel { recurring_uid }
+ */
+export async function cancelRecurringPayment(recurringUid: string): Promise<PayPlusCancelRecurringResponse> {
+  const res = await fetch(`${PAYPLUS_API_URL}/RecurringPayments/Cancel`, {
+    method: 'POST',
+    headers: getHeaders(),
+    body: JSON.stringify({ recurring_uid: recurringUid }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`PayPlus RecurringPayments/Cancel failed (${res.status}): ${text}`);
+  }
+
+  return res.json();
+}

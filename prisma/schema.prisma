@@ -189,6 +189,7 @@ model Business {
   reviews                Review[]
   loyaltyProgram         LoyaltyProgram?
   loyaltyMembers         LoyaltyMember[]
+  campaigns              Campaign[]
 
   @@index([slug])
   @@index([ownerUserId])
@@ -1547,4 +1548,72 @@ enum LoyaltyTransactionType {
   adjust
   expire
   welcome
+}
+
+// ============================================
+// Marketing Campaigns (קמפיינים שיווקיים)
+// ============================================
+
+model Campaign {
+  id              String           @id @default(cuid())
+  businessId      String           @map("business_id")
+  name            String
+  channel         CampaignChannel  @default(whatsapp)
+  message         String           @db.Text
+  audienceType    CampaignAudience @default(all) @map("audience_type")
+  audienceParams  Json?            @map("audience_params")
+  status          CampaignStatus   @default(draft)
+  scheduledFor    DateTime?        @map("scheduled_for")
+  sentAt          DateTime?        @map("sent_at")
+  totalRecipients Int              @default(0) @map("total_recipients")
+  sentCount       Int              @default(0) @map("sent_count")
+  failedCount     Int              @default(0) @map("failed_count")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  business   Business             @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  recipients CampaignRecipient[]
+
+  @@index([businessId, status])
+  @@map("campaigns")
+}
+
+model CampaignRecipient {
+  id           String                  @id @default(cuid())
+  campaignId   String                  @map("campaign_id")
+  customerId   String                  @map("customer_id")
+  status       CampaignRecipientStatus @default(pending)
+  sentAt       DateTime?               @map("sent_at")
+  errorMessage String?                 @map("error_message")
+  createdAt    DateTime                @default(now()) @map("created_at")
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@index([campaignId, status])
+  @@map("campaign_recipients")
+}
+
+enum CampaignChannel {
+  whatsapp
+  sms
+  email
+}
+
+enum CampaignAudience {
+  all
+  inactive
+  frequent
+}
+
+enum CampaignStatus {
+  draft
+  sending
+  sent
+  canceled
+}
+
+enum CampaignRecipientStatus {
+  pending
+  sent
+  failed
 }

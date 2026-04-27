@@ -250,6 +250,36 @@ export async function POST(req: NextRequest) {
       console.error('Error sending booking confirmation:', error);
     });
 
+    // Google Calendar sync (fire-and-forget; never block the booking).
+    (async () => {
+      try {
+        const { createCalendarEvent } = await import('@/lib/google-calendar');
+        // Prefer staff-specific connection, fall back to business-wide
+        const conn = staffId
+          ? await prisma.googleCalendarConnection.findUnique({
+              where: { staffId },
+            })
+          : null;
+        const fallback = !conn
+          ? await prisma.googleCalendarConnection.findFirst({
+              where: { businessId: business.id, staffId: null, syncEnabled: true },
+            })
+          : null;
+        const connection = conn?.syncEnabled ? conn : fallback;
+        if (connection) {
+          await createCalendarEvent(connection.id, connection.calendarId, {
+            summary: `${service.name} — ${customer.firstName} ${customer.lastName}`,
+            description: `${customer.phone}${customer.email ? ` · ${customer.email}` : ''}\nClickynder #${appointment.id}`,
+            startISO: startAt.toISOString(),
+            endISO: endAt.toISOString(),
+            timeZone: businessTz,
+          });
+        }
+      } catch (e) {
+        console.error('Google Calendar sync failed:', e);
+      }
+    })();
+
     await prisma.dashboardNotification.create({
       data: {
         businessId: business.id,

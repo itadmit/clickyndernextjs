@@ -190,6 +190,7 @@ model Business {
   loyaltyProgram         LoyaltyProgram?
   loyaltyMembers         LoyaltyMember[]
   campaigns              Campaign[]
+  googleCalendarConnections GoogleCalendarConnection[]
 
   @@index([slug])
   @@index([ownerUserId])
@@ -362,6 +363,7 @@ model Staff {
   timeOffs          TimeOff[]
   appointments      Appointment[]
   groupSessions     GroupSession[]
+  googleCalendarConnection GoogleCalendarConnection?
 
   @@index([businessId, branchId, active])
   @@map("staff")
@@ -1616,4 +1618,29 @@ enum CampaignRecipientStatus {
   pending
   sent
   failed
+}
+
+// ============================================
+// Google Calendar Integration
+// ============================================
+
+model GoogleCalendarConnection {
+  id            String   @id @default(cuid())
+  businessId    String   @map("business_id")
+  staffId       String?  @unique @map("staff_id") // null => business-wide default calendar
+  googleEmail   String   @map("google_email")
+  calendarId    String   @default("primary") @map("calendar_id")
+  accessToken   String   @db.Text @map("access_token")
+  refreshToken  String   @db.Text @map("refresh_token")
+  scope         String
+  tokenExpiresAt DateTime? @map("token_expires_at")
+  syncEnabled   Boolean  @default(true) @map("sync_enabled")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  business Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  staff    Staff?   @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@index([businessId, syncEnabled])
+  @@map("google_calendar_connections")
 }

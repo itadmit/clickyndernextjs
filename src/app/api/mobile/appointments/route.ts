@@ -20,26 +20,44 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    const filter = searchParams.get('filter') || 'today'; // today, week, month, all
+    const filter = searchParams.get('filter');
     const dateParam = searchParams.get('date'); // specific date: YYYY-MM-DD
+    const fromParam = searchParams.get('from'); // YYYY-MM-DD inclusive
+    const toParam = searchParams.get('to');     // YYYY-MM-DD inclusive
     const status = searchParams.get('status'); // confirmed, pending, canceled, completed
     const staffId = searchParams.get('staffId');
     const branchId = searchParams.get('branchId');
     const page = parseInt(searchParams.get('page') || '1');
     const limit = parseInt(searchParams.get('limit') || '20');
 
+    // Default behavior: when no date-related param is provided at all,
+    // fall back to "today" so legacy callers keep working. If a from/to
+    // range is given, honor it and skip the filter switch entirely.
+    const effectiveFilter = filter || (dateParam || fromParam || toParam ? null : 'today');
+
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     let dateFilter: any = {};
 
-    if (dateParam) {
+    if (fromParam || toParam) {
+      const range: any = {};
+      if (fromParam) {
+        const [y, m, d] = fromParam.split('-').map(Number);
+        range.gte = new Date(y, m - 1, d, 0, 0, 0);
+      }
+      if (toParam) {
+        const [y, m, d] = toParam.split('-').map(Number);
+        range.lte = new Date(y, m - 1, d, 23, 59, 59, 999);
+      }
+      dateFilter = range;
+    } else if (dateParam) {
       const [y, m, d] = dateParam.split('-').map(Number);
       const dayStart = new Date(y, m - 1, d, 0, 0, 0);
       const dayEnd = new Date(y, m - 1, d, 23, 59, 59, 999);
       dateFilter = { gte: dayStart, lte: dayEnd };
-    } else {
-      switch (filter) {
+    } else if (effectiveFilter) {
+      switch (effectiveFilter) {
         case 'today': {
           const todayEnd = new Date(todayStart);
           todayEnd.setDate(todayEnd.getDate() + 1);
@@ -95,6 +113,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       appointments: appointments.map((apt) => ({
         id: apt.id,
+        businessId: apt.businessId,
+        serviceId: apt.serviceId,
+        staffId: apt.staffId,
+        branchId: apt.branchId,
+        customerId: apt.customerId,
         startAt: apt.startAt,
         endAt: apt.endAt,
         status: apt.status,
